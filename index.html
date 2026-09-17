@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Maze — Hidden Danger</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+</head>
+
+
+<body>
+
+
+<div id="gameScreen">
+
+
+    <!-- ============================================================
+         HEADER
+         ============================================================ -->
+
+    <header class="game-header">
+
+
+        <div class="level-info">
+
+            <div
+                id="levelNumber"
+                class="level-number"
+            >
+                LEVEL 01
+            </div>
+
+
+            <div
+                id="levelName"
+                class="level-title"
+            >
+                The First Descent
+            </div>
+
+        </div>
+
+
+        <div class="timer-box">
+
+            <span class="timer-label">
+                TIME
+            </span>
+
+            <span id="timer">
+                01:30
+            </span>
+
+        </div>
+
+
+    </header>
+
+
+
+    <!-- ============================================================
+         MAZE
+         ============================================================ -->
+
+    <main class="game-main">
+
+        <div class="maze-wrapper">
+
+            <canvas
+                id="gameCanvas"
+            ></canvas>
+
+        </div>
+
+    </main>
+
+
+
+    <!-- ============================================================
+         CONTROLS
+         ============================================================ -->
+
+    <footer class="game-footer">
+
+
+        <div class="controls">
+
+
+            <div class="key-group">
+
+                <span class="key">W</span>
+                <span class="key">A</span>
+                <span class="key">S</span>
+                <span class="key">D</span>
+
+            </div>
+
+
+            <span class="control-slash">
+                /
+            </span>
+
+
+            <div class="key-group">
+
+                <span class="key">↑</span>
+                <span class="key">←</span>
+                <span class="key">↓</span>
+                <span class="key">→</span>
+
+            </div>
+
+
+            <span class="control-label">
+                MOVE
+            </span>
+
+
+            <div class="control-divider"></div>
+
+
+            <div class="key-group">
+
+                <span class="key">
+                    ESC
+                </span>
+
+                <span class="control-label">
+                    PAUSE
+                </span>
+
+            </div>
+
+
+        </div>
+
+
+        <div class="exit-hint">
+            FIND THE EXIT
+        </div>
+
+
+    </footer>
+
+
+</div>
+
+
+
+<!-- ============================================================
+     WARNING
+     ============================================================ -->
+
+<div
+    id="warningOverlay"
+    class="warning-overlay hidden"
+>
+
+    <div class="warning-box">
+
+        <div class="warning-icon">
+            !
+        </div>
+
+        <div
+            id="warningText"
+            class="warning-text"
+        >
+            SOMETHING IS COMING
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<!-- ============================================================
+     PAUSE
+     ============================================================ -->
+
+<div
+    id="pauseOverlay"
+    class="overlay hidden"
+>
+
+    <div class="overlay-panel">
+
+        <div class="overlay-small-title">
+            MAZE ESCAPE
+        </div>
+
+        <h2>
+            PAUSED
+        </h2>
+
+        <p>
+            The maze is waiting.
+        </p>
+
+
+        <div class="overlay-buttons">
+
+            <button
+                id="continueButton"
+                class="game-button"
+            >
+                CONTINUE
+            </button>
+
+
+            <button
+                id="exitButton"
+                class="game-button exit-button"
+            >
+                EXIT
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<!-- ============================================================
+     GAME OVER / LEVEL COMPLETE
+     ============================================================ -->
+
+<div
+    id="gameOverlay"
+    class="overlay hidden"
+>
+
+    <div class="overlay-panel">
+
+        <div class="overlay-small-title">
+            MAZE ESCAPE
+        </div>
+
+
+        <h2 id="overlayTitle">
+            GAME OVER
+        </h2>
+
+
+        <p id="overlayMessage">
+            You were caught.
+        </p>
+
+
+        <button
+            id="restartButton"
+            class="game-button"
+        >
+            PLAY AGAIN
+        </button>
+
+    </div>
+
+</div>
+
+
+
+<!-- ============================================================
+     EXIT SCREEN
+     ============================================================ -->
+
+<div
+    id="exitOverlay"
+    class="overlay hidden"
+>
+
+    <div class="overlay-panel">
+
+        <div class="overlay-small-title">
+            MAZE ESCAPE
+        </div>
+
+
+        <h2>
+            GAME EXITED
+        </h2>
+
+
+        <p>
+            Your progress has been stopped.
+        </p>
+
+
+        <button
+            id="exitRestartButton"
+            class="game-button"
+        >
+            PLAY AGAIN
+        </button>
+
+    </div>
+
+</div>
+
+
+
+<!-- ============================================================
+     JAVASCRIPT
+     
+     IMPORTANT:
+     These files are inside /js/
+     ============================================================ -->
+
+<script src="js/levels.js"></script>
+<script src="js/maze.js"></script>
+<script src="js/player.js"></script>
+<script src="js/hazards.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+
+
+</body>
+
+</html>

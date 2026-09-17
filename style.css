@@ -1,0 +1,1011 @@
+/* ================================================================
+   MAZE ESCAPE
+   FULL SCREEN DARK GAME INTERFACE
+   ================================================================ */
+
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+}
+
+
+body {
+
+    background:
+        radial-gradient(
+            ellipse at center,
+            #14202b 0%,
+            #0a1118 45%,
+            #04080c 100%
+        );
+
+    color: #edf6ff;
+
+    font-family:
+        "Segoe UI",
+        Arial,
+        sans-serif;
+}
+
+
+/* ================================================================
+   GAME SCREEN
+   ================================================================ */
+
+#gameScreen {
+
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: hidden;
+
+    position: relative;
+}
+
+
+/* ================================================================
+   HEADER
+   ================================================================ */
+
+.game-header {
+
+    flex: 0 0 auto;
+
+    width: 100%;
+
+    min-height: 86px;
+
+    padding:
+        16px
+        clamp(20px, 4vw, 65px)
+        12px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(7, 14, 22, 0.98),
+            rgba(7, 14, 22, 0.72)
+        );
+
+    border-bottom:
+        1px solid
+        rgba(105, 155, 200, 0.18);
+
+    position: relative;
+
+    z-index: 10;
+}
+
+
+.game-header::after {
+
+    content: "";
+
+    position: absolute;
+
+    left: 4%;
+    right: 4%;
+    bottom: 0;
+
+    height: 1px;
+
+    background:
+        linear-gradient(
+            90deg,
+            transparent,
+            rgba(105, 180, 240, 0.45),
+            transparent
+        );
+}
+
+
+/* ================================================================
+   LEVEL TITLE
+   ================================================================ */
+
+.level-info {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 4px;
+}
+
+
+.level-number {
+
+    font-size: 11px;
+
+    font-weight: 700;
+
+    letter-spacing: 5px;
+
+    color: #8fb6dc;
+}
+
+
+.level-title {
+
+    font-family:
+        Georgia,
+        "Times New Roman",
+        serif;
+
+    font-size:
+        clamp(24px, 3vw, 42px);
+
+    line-height: 1;
+
+    color: #f1f6ff;
+
+    text-shadow:
+        0 0 20px
+        rgba(120, 180, 240, 0.16);
+}
+
+
+/* ================================================================
+   TIMER
+   ================================================================ */
+
+.timer-box {
+
+    min-width: 155px;
+
+    padding:
+        8px
+        22px
+        10px;
+
+    text-align: center;
+
+    border:
+        1px solid
+        rgba(110, 170, 225, 0.65);
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(20, 36, 52, 0.95),
+            rgba(6, 13, 20, 0.96)
+        );
+
+    clip-path:
+        polygon(
+            14px 0,
+            100% 0,
+            100% 100%,
+            14px 100%,
+            0 72%,
+            0 28%
+        );
+
+    box-shadow:
+        0 0 25px
+        rgba(60, 140, 210, 0.08);
+}
+
+
+.timer-label {
+
+    display: block;
+
+    font-size: 9px;
+
+    letter-spacing: 4px;
+
+    color: #8baac7;
+}
+
+
+#timer {
+
+    display: block;
+
+    margin-top: 2px;
+
+    font-family:
+        "Courier New",
+        monospace;
+
+    font-size:
+        clamp(25px, 3vw, 38px);
+
+    font-weight: bold;
+
+    letter-spacing: 2px;
+
+    color: #f2f7ff;
+}
+
+
+/* ================================================================
+   MAIN MAZE AREA
+   ================================================================ */
+
+.game-main {
+
+    flex: 1 1 auto;
+
+    min-height: 0;
+
+    width: 100%;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding:
+        10px
+        clamp(16px, 4vw, 65px);
+
+    overflow: hidden;
+
+    position: relative;
+}
+
+
+/* ================================================================
+   MAZE WRAPPER
+   ================================================================ */
+
+.maze-wrapper {
+
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    overflow: hidden;
+}
+
+
+/* ================================================================
+   CANVAS
+   ================================================================ */
+
+#gameCanvas {
+
+    display: block;
+
+    /*
+       Your maze is rendered internally at its natural
+       resolution by Renderer.
+
+       CSS only scales it visually.
+    */
+
+    width: auto;
+    height: auto;
+
+    max-width: 100%;
+    max-height: 100%;
+
+    aspect-ratio: auto;
+
+    background: #080c11;
+
+    border:
+        2px solid
+        #283744;
+
+    box-shadow:
+        0 0 0 1px
+        rgba(140, 180, 215, 0.06),
+
+        0 0 35px
+        rgba(0, 0, 0, 0.75),
+
+        0 0 80px
+        rgba(0, 0, 0, 0.35);
+
+    image-rendering: pixelated;
+}
+
+
+/* ================================================================
+   FOOTER
+   ================================================================ */
+
+.game-footer {
+
+    flex: 0 0 auto;
+
+    min-height: 62px;
+
+    width: 100%;
+
+    padding:
+        8px
+        clamp(20px, 4vw, 65px)
+        16px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    background:
+        linear-gradient(
+            0deg,
+            rgba(5, 10, 15, 0.98),
+            rgba(5, 10, 15, 0.72)
+        );
+
+    border-top:
+        1px solid
+        rgba(105, 155, 200, 0.12);
+}
+
+
+/* ================================================================
+   CONTROLS
+   ================================================================ */
+
+.controls {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    padding:
+        8px
+        16px;
+
+    border:
+        1px solid
+        rgba(100, 155, 210, 0.45);
+
+    background:
+        rgba(7, 13, 20, 0.82);
+
+    clip-path:
+        polygon(
+            10px 0,
+            calc(100% - 10px) 0,
+            100% 10px,
+            100% calc(100% - 10px),
+            calc(100% - 10px) 100%,
+            10px 100%,
+            0 calc(100% - 10px),
+            0 10px
+        );
+}
+
+
+.key-group {
+
+    display: flex;
+
+    gap: 4px;
+}
+
+
+.key {
+
+    width: 27px;
+    height: 27px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    border:
+        1px solid
+        #557a9f;
+
+    border-radius: 4px;
+
+    background:
+        linear-gradient(
+            180deg,
+            #1b2d40,
+            #0a131d
+        );
+
+    color: #dcecff;
+
+    font-size: 10px;
+
+    font-weight: bold;
+}
+
+
+.control-slash {
+
+    color: #5f7890;
+
+    margin: 0 3px;
+}
+
+
+.control-label {
+
+    color: #7799b9;
+
+    font-size: 9px;
+
+    letter-spacing: 3px;
+
+    margin-left: 3px;
+}
+
+
+.control-divider {
+
+    width: 1px;
+
+    height: 25px;
+
+    margin:
+        0
+        10px;
+
+    background:
+        rgba(130, 170, 210, 0.25);
+}
+
+
+/* ================================================================
+   FIND EXIT
+   ================================================================ */
+
+.exit-hint {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 13px;
+
+    color: #9ab6d0;
+
+    font-size: 11px;
+
+    letter-spacing: 5px;
+
+    white-space: nowrap;
+}
+
+
+.exit-hint::before,
+.exit-hint::after {
+
+    content: "";
+
+    width: 38px;
+
+    height: 1px;
+
+    background: #58748f;
+}
+
+
+/* ================================================================
+   WARNING
+   ================================================================ */
+
+.warning-overlay {
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 100;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background:
+        rgba(0, 0, 0, 0.68);
+
+    backdrop-filter: blur(3px);
+
+    pointer-events: none;
+}
+
+
+.warning-box {
+
+    padding:
+        30px
+        60px;
+
+    text-align: center;
+
+    background:
+        rgba(5, 10, 16, 0.94);
+
+    border-top:
+        1px solid
+        #b6d9ff;
+
+    border-bottom:
+        1px solid
+        #b6d9ff;
+
+    box-shadow:
+        0 0 60px
+        rgba(80, 160, 230, 0.15);
+}
+
+
+.warning-icon {
+
+    width: 55px;
+    height: 55px;
+
+    margin: auto;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    border:
+        2px solid
+        #e75b5b;
+
+    border-radius: 50%;
+
+    color: #ff7777;
+
+    font-size: 27px;
+
+    font-weight: bold;
+}
+
+
+.warning-text {
+
+    margin-top: 15px;
+
+    color: #f0f5ff;
+
+    font-size:
+        clamp(15px, 2vw, 22px);
+
+    font-weight: bold;
+
+    letter-spacing: 5px;
+}
+
+
+/* ================================================================
+   HIDDEN
+   ================================================================ */
+
+.hidden {
+
+    display: none !important;
+}
+
+
+/* ================================================================
+   OVERLAYS
+   ================================================================ */
+
+.overlay {
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 200;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 20px;
+
+    background:
+        rgba(2, 6, 10, 0.82);
+
+    backdrop-filter: blur(7px);
+}
+
+
+/* ================================================================
+   OVERLAY PANEL
+   ================================================================ */
+
+.overlay-panel {
+
+    width:
+        min(500px, 90vw);
+
+    padding: 45px;
+
+    text-align: center;
+
+    position: relative;
+
+    background:
+        linear-gradient(
+            145deg,
+            #111e2b,
+            #070e15
+        );
+
+    border:
+        1px solid
+        #36506a;
+
+    box-shadow:
+        0 30px 80px
+        rgba(0, 0, 0, 0.8);
+}
+
+
+.overlay-panel::before {
+
+    content: "";
+
+    position: absolute;
+
+    top: -1px;
+    left: -1px;
+
+    width: 42px;
+    height: 42px;
+
+    border-top:
+        2px solid
+        #769fc5;
+
+    border-left:
+        2px solid
+        #769fc5;
+}
+
+
+.overlay-panel::after {
+
+    content: "";
+
+    position: absolute;
+
+    right: -1px;
+    bottom: -1px;
+
+    width: 42px;
+    height: 42px;
+
+    border-right:
+        2px solid
+        #769fc5;
+
+    border-bottom:
+        2px solid
+        #769fc5;
+}
+
+
+.overlay-small-title {
+
+    color: #789aba;
+
+    font-size: 9px;
+
+    letter-spacing: 5px;
+
+    margin-bottom: 10px;
+}
+
+
+.overlay-panel h2 {
+
+    font-family:
+        Georgia,
+        "Times New Roman",
+        serif;
+
+    font-size:
+        clamp(30px, 5vw, 46px);
+
+    color: #eef6ff;
+
+    letter-spacing: 4px;
+}
+
+
+.overlay-panel p {
+
+    margin-top: 13px;
+
+    margin-bottom: 28px;
+
+    color: #91a9bf;
+
+    line-height: 1.6;
+}
+
+
+/* ================================================================
+   BUTTONS
+   ================================================================ */
+
+.overlay-buttons {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 8px;
+
+    flex-wrap: wrap;
+}
+
+
+.game-button {
+
+    min-width: 150px;
+
+    padding:
+        13px
+        24px;
+
+    border:
+        1px solid
+        #6387aa;
+
+    background:
+        linear-gradient(
+            180deg,
+            #1b344b,
+            #0b1723
+        );
+
+    color: #eaf4ff;
+
+    font-size: 11px;
+
+    font-weight: bold;
+
+    letter-spacing: 2px;
+
+    cursor: pointer;
+
+    transition:
+        0.2s ease;
+}
+
+
+.game-button:hover {
+
+    background:
+        linear-gradient(
+            180deg,
+            #294b68,
+            #112638
+        );
+
+    box-shadow:
+        0 0 25px
+        rgba(90, 160, 220, 0.18);
+
+    transform:
+        translateY(-2px);
+}
+
+
+.game-button:active {
+
+    transform:
+        translateY(0);
+}
+
+
+.exit-button {
+
+    border-color:
+        #765860;
+
+    background:
+        linear-gradient(
+            180deg,
+            #351f26,
+            #1b1015
+        );
+}
+
+
+.exit-button:hover {
+
+    background:
+        linear-gradient(
+            180deg,
+            #503039,
+            #28151c
+        );
+}
+
+
+/* ================================================================
+   RESPONSIVE
+   ================================================================ */
+
+@media (max-width: 800px) {
+
+    .game-header {
+
+        min-height: 70px;
+
+        padding:
+            10px
+            14px;
+    }
+
+
+    .level-number {
+
+        font-size: 8px;
+
+        letter-spacing: 3px;
+    }
+
+
+    .level-title {
+
+        font-size: 22px;
+    }
+
+
+    .timer-box {
+
+        min-width: 105px;
+
+        padding:
+            6px
+            12px
+            8px;
+    }
+
+
+    .timer-label {
+
+        font-size: 8px;
+
+        letter-spacing: 2px;
+    }
+
+
+    #timer {
+
+        font-size: 22px;
+    }
+
+
+    .game-main {
+
+        padding:
+            6px
+            8px;
+    }
+
+
+    .game-footer {
+
+        min-height: 48px;
+
+        padding:
+            5px
+            10px
+            8px;
+    }
+
+
+    .controls {
+
+        padding:
+            6px
+            9px;
+
+        gap: 5px;
+    }
+
+
+    .key {
+
+        width: 23px;
+        height: 23px;
+
+        font-size: 8px;
+    }
+
+
+    .control-label,
+    .control-slash,
+    .control-divider {
+
+        display: none;
+    }
+
+
+    .exit-hint {
+
+        display: none;
+    }
+
+
+    .overlay-panel {
+
+        padding:
+            32px
+            20px;
+    }
+}
+
+
+/* ================================================================
+   SHORT SCREEN
+   ================================================================ */
+
+@media (max-height: 650px) {
+
+    .game-header {
+
+        min-height: 60px;
+
+        padding:
+            7px
+            15px;
+    }
+
+
+    .level-title {
+
+        font-size: 23px;
+    }
+
+
+    .game-footer {
+
+        min-height: 42px;
+
+        padding:
+            4px
+            10px
+            6px;
+    }
+}
