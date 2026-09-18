@@ -296,13 +296,6 @@ body {
 
     display: block;
 
-    /*
-       Your maze is rendered internally at its natural
-       resolution by Renderer.
-
-       CSS only scales it visually.
-    */
-
     width: auto;
     height: auto;
 
@@ -514,16 +507,134 @@ body {
 
 
 /* ================================================================
-   WARNING
+   WARNING SYSTEM
+   ================================================================
+   
+   IMPORTANT:
+   
+   This is NO LONGER a fullscreen modal.
+   
+   The maze remains visible.
+   The player remains active.
+   The timer continues.
+   
+   The warning consists of:
+   
+       1. A brief red screen-edge pulse
+       2. A fast sliding warning strip at the top
+   
    ================================================================ */
+
+
+/*
+ * ---------------------------------------------------------------
+ * WARNING CONTAINER
+ * ---------------------------------------------------------------
+ */
 
 .warning-overlay {
 
     position: fixed;
 
+    top: 0;
+    left: 0;
+
+    width: 100%;
+    height: 100%;
+
+    z-index: 150;
+
+    pointer-events: none;
+
+    display: block;
+
+    background:
+        transparent;
+
+    /*
+     * No blur.
+     * No dark fullscreen background.
+     */
+    backdrop-filter: none;
+
+    /*
+     * This animation creates the quick red warning flash.
+     */
+    animation:
+        warningRedPulse
+        0.42s
+        ease-out
+        0s
+        3;
+
+}
+
+
+/*
+ * ---------------------------------------------------------------
+ * RED SCREEN EDGE FLASH
+ * ---------------------------------------------------------------
+ */
+
+.warning-overlay::before {
+
+    content: "";
+
+    position: absolute;
+
     inset: 0;
 
-    z-index: 100;
+    pointer-events: none;
+
+    border:
+        0 solid
+        rgba(255, 45, 45, 0);
+
+    box-shadow:
+        inset
+        0 0 0
+        rgba(255, 30, 30, 0);
+
+    animation:
+        warningEdgeFlash
+        0.55s
+        ease-out
+        0s
+        3;
+}
+
+
+/*
+ * ---------------------------------------------------------------
+ * WARNING BOX
+ * ---------------------------------------------------------------
+ *
+ * The existing UI uses .warning-box.
+ *
+ * Instead of displaying a center popup, we transform it into
+ * a thin warning banner that enters from above.
+ */
+
+.warning-box {
+
+    position: absolute;
+
+    top: 86px;
+
+    left: 50%;
+
+    transform:
+        translateX(-50%)
+        translateY(-160%);
+
+    width:
+        min(720px, 92vw);
+
+    min-height: 52px;
+
+    padding:
+        11px
+        28px;
 
     display: flex;
 
@@ -531,46 +642,90 @@ body {
 
     justify-content: center;
 
-    background:
-        rgba(0, 0, 0, 0.68);
-
-    backdrop-filter: blur(3px);
-
-    pointer-events: none;
-}
-
-
-.warning-box {
-
-    padding:
-        30px
-        60px;
+    gap: 14px;
 
     text-align: center;
 
     background:
-        rgba(5, 10, 16, 0.94);
+        linear-gradient(
+            90deg,
+            rgba(55, 5, 8, 0.94),
+            rgba(125, 12, 18, 0.97),
+            rgba(55, 5, 8, 0.94)
+        );
 
-    border-top:
+    border:
         1px solid
-        #b6d9ff;
+        rgba(255, 91, 91, 0.82);
 
-    border-bottom:
-        1px solid
-        #b6d9ff;
+    border-left:
+        3px solid
+        #ff4b4b;
+
+    border-right:
+        3px solid
+        #ff4b4b;
 
     box-shadow:
-        0 0 60px
-        rgba(80, 160, 230, 0.15);
+        0 8px 28px
+        rgba(0, 0, 0, 0.45),
+
+        0 0 28px
+        rgba(255, 35, 35, 0.28);
+
+    /*
+     * The UI adds/removes .hidden.
+     *
+     * The animation is activated when the warning is visible.
+     */
 }
 
 
+/*
+ * When warning is visible, animate the banner.
+ *
+ * The existing .hidden class has display:none, so this animation
+ * only runs while the warning is actually shown.
+ */
+
+.warning-overlay:not(.hidden) .warning-box {
+
+    animation:
+        warningSlideIn
+        0.22s
+        cubic-bezier(
+            0.16,
+            1,
+            0.3,
+            1
+        )
+        forwards,
+
+        warningSlideOut
+        0.22s
+        ease-in
+        1.08s
+        forwards;
+
+}
+
+
+/*
+ * ---------------------------------------------------------------
+ * WARNING ICON
+ * ---------------------------------------------------------------
+ */
+
 .warning-icon {
 
-    width: 55px;
-    height: 55px;
+    width: 31px;
+    height: 31px;
 
-    margin: auto;
+    flex:
+        0 0
+        31px;
+
+    margin: 0;
 
     display: flex;
 
@@ -579,30 +734,279 @@ body {
 
     border:
         2px solid
-        #e75b5b;
+        #ff7777;
 
     border-radius: 50%;
 
-    color: #ff7777;
+    color:
+        #ffffff;
 
-    font-size: 27px;
+    background:
+        rgba(255, 50, 50, 0.12);
+
+    font-size: 16px;
 
     font-weight: bold;
+
+    box-shadow:
+        0 0 14px
+        rgba(255, 70, 70, 0.55);
+
+    animation:
+        warningIconPulse
+        0.32s
+        ease-in-out
+        0s
+        4;
 }
 
 
+/*
+ * ---------------------------------------------------------------
+ * WARNING TEXT
+ * ---------------------------------------------------------------
+ */
+
 .warning-text {
 
-    margin-top: 15px;
+    margin:
+        0;
 
-    color: #f0f5ff;
+    color:
+        #ffffff;
 
     font-size:
-        clamp(15px, 2vw, 22px);
+        clamp(
+            12px,
+            1.6vw,
+            17px
+        );
 
-    font-weight: bold;
+    font-weight:
+        800;
 
-    letter-spacing: 5px;
+    letter-spacing:
+        clamp(
+            2px,
+            0.5vw,
+            5px
+        );
+
+    text-shadow:
+        0 0 10px
+        rgba(255, 80, 80, 0.75);
+
+    white-space:
+        nowrap;
+}
+
+
+/*
+ * ---------------------------------------------------------------
+ * WARNING ANIMATIONS
+ * ---------------------------------------------------------------
+ */
+
+
+/*
+ * Fast banner entrance.
+ */
+
+@keyframes warningSlideIn {
+
+    0% {
+
+        transform:
+            translateX(-50%)
+            translateY(-160%);
+
+        opacity:
+            0;
+
+    }
+
+
+    100% {
+
+        transform:
+            translateX(-50%)
+            translateY(0);
+
+        opacity:
+            1;
+
+    }
+
+}
+
+
+/*
+ * Fast banner exit.
+ */
+
+@keyframes warningSlideOut {
+
+    0% {
+
+        transform:
+            translateX(-50%)
+            translateY(0);
+
+        opacity:
+            1;
+
+    }
+
+
+    100% {
+
+        transform:
+            translateX(-50%)
+            translateY(-160%);
+
+        opacity:
+            0;
+
+    }
+
+}
+
+
+/*
+ * Red edge pulse.
+ *
+ * The maze is never covered by a black overlay.
+ */
+
+@keyframes warningRedPulse {
+
+    0% {
+
+        background:
+            rgba(255, 0, 0, 0);
+
+    }
+
+
+    20% {
+
+        background:
+            rgba(255, 0, 0, 0.07);
+
+    }
+
+
+    40% {
+
+        background:
+            rgba(255, 0, 0, 0);
+
+    }
+
+
+    60% {
+
+        background:
+            rgba(255, 0, 0, 0.055);
+
+    }
+
+
+    100% {
+
+        background:
+            rgba(255, 0, 0, 0);
+
+    }
+
+}
+
+
+@keyframes warningEdgeFlash {
+
+    0% {
+
+        border:
+            0 solid
+            rgba(255, 30, 30, 0);
+
+        box-shadow:
+            inset
+            0 0 0
+            rgba(255, 30, 30, 0);
+
+    }
+
+
+    25% {
+
+        border:
+            7px solid
+            rgba(255, 35, 35, 0.75);
+
+        box-shadow:
+            inset
+            0 0 35px
+            rgba(255, 25, 25, 0.30);
+
+    }
+
+
+    55% {
+
+        border:
+            4px solid
+            rgba(255, 35, 35, 0.42);
+
+        box-shadow:
+            inset
+            0 0 22px
+            rgba(255, 25, 25, 0.17);
+
+    }
+
+
+    100% {
+
+        border:
+            0 solid
+            rgba(255, 30, 30, 0);
+
+        box-shadow:
+            inset
+            0 0 0
+            rgba(255, 30, 30, 0);
+
+    }
+
+}
+
+
+@keyframes warningIconPulse {
+
+    0% {
+
+        transform:
+            scale(1);
+
+    }
+
+
+    50% {
+
+        transform:
+            scale(1.12);
+
+    }
+
+
+    100% {
+
+        transform:
+            scale(1);
+
+    }
+
 }
 
 
@@ -612,7 +1016,8 @@ body {
 
 .hidden {
 
-    display: none !important;
+    display:
+        none !important;
 }
 
 
@@ -639,7 +1044,8 @@ body {
     background:
         rgba(2, 6, 10, 0.82);
 
-    backdrop-filter: blur(7px);
+    backdrop-filter:
+        blur(7px);
 }
 
 
@@ -652,11 +1058,14 @@ body {
     width:
         min(500px, 90vw);
 
-    padding: 45px;
+    padding:
+        45px;
 
-    text-align: center;
+    text-align:
+        center;
 
-    position: relative;
+    position:
+        relative;
 
     background:
         linear-gradient(
@@ -681,11 +1090,17 @@ body {
 
     position: absolute;
 
-    top: -1px;
-    left: -1px;
+    top:
+        -1px;
 
-    width: 42px;
-    height: 42px;
+    left:
+        -1px;
+
+    width:
+        42px;
+
+    height:
+        42px;
 
     border-top:
         2px solid
@@ -703,11 +1118,17 @@ body {
 
     position: absolute;
 
-    right: -1px;
-    bottom: -1px;
+    right:
+        -1px;
 
-    width: 42px;
-    height: 42px;
+    bottom:
+        -1px;
+
+    width:
+        42px;
+
+    height:
+        42px;
 
     border-right:
         2px solid
@@ -721,13 +1142,17 @@ body {
 
 .overlay-small-title {
 
-    color: #789aba;
+    color:
+        #789aba;
 
-    font-size: 9px;
+    font-size:
+        9px;
 
-    letter-spacing: 5px;
+    letter-spacing:
+        5px;
 
-    margin-bottom: 10px;
+    margin-bottom:
+        10px;
 }
 
 
@@ -739,23 +1164,33 @@ body {
         serif;
 
     font-size:
-        clamp(30px, 5vw, 46px);
+        clamp(
+            30px,
+            5vw,
+            46px
+        );
 
-    color: #eef6ff;
+    color:
+        #eef6ff;
 
-    letter-spacing: 4px;
+    letter-spacing:
+        4px;
 }
 
 
 .overlay-panel p {
 
-    margin-top: 13px;
+    margin-top:
+        13px;
 
-    margin-bottom: 28px;
+    margin-bottom:
+        28px;
 
-    color: #91a9bf;
+    color:
+        #91a9bf;
 
-    line-height: 1.6;
+    line-height:
+        1.6;
 }
 
 
@@ -765,21 +1200,27 @@ body {
 
 .overlay-buttons {
 
-    display: flex;
+    display:
+        flex;
 
-    align-items: center;
+    align-items:
+        center;
 
-    justify-content: center;
+    justify-content:
+        center;
 
-    gap: 8px;
+    gap:
+        8px;
 
-    flex-wrap: wrap;
+    flex-wrap:
+        wrap;
 }
 
 
 .game-button {
 
-    min-width: 150px;
+    min-width:
+        150px;
 
     padding:
         13px
@@ -796,15 +1237,20 @@ body {
             #0b1723
         );
 
-    color: #eaf4ff;
+    color:
+        #eaf4ff;
 
-    font-size: 11px;
+    font-size:
+        11px;
 
-    font-weight: bold;
+    font-weight:
+        bold;
 
-    letter-spacing: 2px;
+    letter-spacing:
+        2px;
 
-    cursor: pointer;
+    cursor:
+        pointer;
 
     transition:
         0.2s ease;
@@ -869,7 +1315,8 @@ body {
 
     .game-header {
 
-        min-height: 70px;
+        min-height:
+            70px;
 
         padding:
             10px
@@ -879,21 +1326,25 @@ body {
 
     .level-number {
 
-        font-size: 8px;
+        font-size:
+            8px;
 
-        letter-spacing: 3px;
+        letter-spacing:
+            3px;
     }
 
 
     .level-title {
 
-        font-size: 22px;
+        font-size:
+            22px;
     }
 
 
     .timer-box {
 
-        min-width: 105px;
+        min-width:
+            105px;
 
         padding:
             6px
@@ -904,15 +1355,18 @@ body {
 
     .timer-label {
 
-        font-size: 8px;
+        font-size:
+            8px;
 
-        letter-spacing: 2px;
+        letter-spacing:
+            2px;
     }
 
 
     #timer {
 
-        font-size: 22px;
+        font-size:
+            22px;
     }
 
 
@@ -926,7 +1380,8 @@ body {
 
     .game-footer {
 
-        min-height: 48px;
+        min-height:
+            48px;
 
         padding:
             5px
@@ -941,16 +1396,21 @@ body {
             6px
             9px;
 
-        gap: 5px;
+        gap:
+            5px;
     }
 
 
     .key {
 
-        width: 23px;
-        height: 23px;
+        width:
+            23px;
 
-        font-size: 8px;
+        height:
+            23px;
+
+        font-size:
+            8px;
     }
 
 
@@ -958,13 +1418,15 @@ body {
     .control-slash,
     .control-divider {
 
-        display: none;
+        display:
+            none;
     }
 
 
     .exit-hint {
 
-        display: none;
+        display:
+            none;
     }
 
 
@@ -974,6 +1436,57 @@ body {
             32px
             20px;
     }
+
+
+    /*
+     * Move warning closer to the top on smaller screens.
+     */
+
+    .warning-box {
+
+        top:
+            72px;
+
+        width:
+            min(
+                94vw,
+                600px
+            );
+
+        min-height:
+            46px;
+
+        padding:
+            8px
+            16px;
+    }
+
+
+    .warning-icon {
+
+        width:
+            27px;
+
+        height:
+            27px;
+
+        flex-basis:
+            27px;
+
+        font-size:
+            14px;
+    }
+
+
+    .warning-text {
+
+        font-size:
+            11px;
+
+        letter-spacing:
+            2px;
+    }
+
 }
 
 
@@ -985,7 +1498,8 @@ body {
 
     .game-header {
 
-        min-height: 60px;
+        min-height:
+            60px;
 
         padding:
             7px
@@ -995,17 +1509,65 @@ body {
 
     .level-title {
 
-        font-size: 23px;
+        font-size:
+            23px;
     }
 
 
     .game-footer {
 
-        min-height: 42px;
+        min-height:
+            42px;
 
         padding:
             4px
             10px
             6px;
     }
+
+
+    .warning-box {
+
+        top:
+            61px;
+
+        min-height:
+            42px;
+
+        padding:
+            7px
+            14px;
+    }
+
+}
+
+
+/* ================================================================
+   ACCESSIBILITY / REDUCED MOTION
+   ================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .warning-overlay,
+    .warning-overlay::before,
+    .warning-overlay:not(.hidden) .warning-box,
+    .warning-icon {
+
+        animation:
+            none !important;
+
+    }
+
+
+    .warning-box {
+
+        transform:
+            translateX(-50%)
+            translateY(0);
+
+        opacity:
+            1;
+
+    }
+
 }

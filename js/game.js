@@ -12,6 +12,12 @@ class Game {
         this.levelIndex =
             0;
 
+        /*
+         * Prevent finishLevel() from being processed repeatedly.
+         */
+        this.levelFinished =
+            false;
+
 
         this.maze =
             null;
@@ -22,19 +28,15 @@ class Game {
         this.hazards =
             [];
 
-        // Level chase settings are used as templates. The actual
-        // trigger position is selected dynamically from the route
-        // the player chooses during the current run.
+
         this.hazardTemplates =
             [];
+
 
         this.trapTriggeredCells =
             new Set();
 
 
-        /*
-         * Keep the original Renderer.
-         */
         this.renderer =
             null;
 
@@ -52,22 +54,24 @@ class Game {
         this.remainingTime =
             0;
 
-
         this.lastTime =
             0;
 
 
         /*
          * =========================================================
-         * WARNING STATE
+         * NORMAL WARNING STATE
          * =========================================================
          *
-         * While warningActive is true:
+         * Normal warnings are now only a visual flash.
          *
-         * - Player does not move
-         * - Timer does not decrease
-         * - Ghost does not move
+         * IMPORTANT:
+         * The ghost does NOT wait for warningTime anymore.
          *
+         * Trigger:
+         *     red flash + warning sound
+         *     ghost appears immediately
+         *     ghost starts chasing immediately
          */
 
         this.warningActive =
@@ -81,20 +85,44 @@ class Game {
 
 
         /*
-         * Events that have already been triggered.
-         *
-         * Once an event is triggered it cannot trigger again
-         * during this level.
+         * Events already triggered during this level.
          */
+
         this.triggeredEvents =
             new Set();
 
+
         /*
-         * Recent safe-route history, kept separately for each level.
-         * We use this to make repeated restarts visibly random instead of
-         * merely hoping Math.random does not select the same route again.
+         * Keep a small history of recently selected safe routes
+         * for each level.
          */
-        this.recentSafeRouteSignatures = new Map();
+
+        this.recentSafeRouteSignatures =
+            new Map();
+
+
+        /*
+         * =========================================================
+         * FIRST ENCOUNTER
+         * =========================================================
+         *
+         * The FIRST wrong-route encounter of the WHOLE GAME:
+         *
+         * 1. Game pauses.
+         * 2. Timer pauses.
+         * 3. Player cannot move.
+         * 4. Center warning appears.
+         * 5. Player must press CONTINUE.
+         * 6. Ghost starts chasing immediately.
+         *
+         * Later encounters do NOT pause the game.
+         */
+
+        this.firstEncounterWarningShown =
+            false;
+
+        this.firstEncounterOverlay =
+            null;
 
     }
 
@@ -107,17 +135,38 @@ class Game {
 
     start() {
 
-        /*
-         * Prevent accidentally creating multiple
-         * animation loops.
-         */
-        if (this.running) {
+        if (
+            this.running
+        ) {
+
             return;
+
         }
 
 
         this.running =
             true;
+
+
+        this.gameOver =
+            false;
+
+        this.paused =
+            false;
+
+        this.levelFinished =
+            false;
+
+
+        /*
+         * A completely new game starts from Level 1.
+         */
+
+        this.levelIndex =
+            0;
+
+        this.firstEncounterWarningShown =
+            false;
 
 
         this.loadLevel(
@@ -169,6 +218,14 @@ class Game {
 
 
         /*
+         * Reset level completion state.
+         */
+
+        this.levelFinished =
+            false;
+
+
+        /*
          * =========================================================
          * MAZE
          * =========================================================
@@ -182,27 +239,13 @@ class Game {
 
         /*
          * =========================================================
-         * LEVEL THEME
+         * LEVEL SETTINGS
          * =========================================================
-         *
-         * Store the theme on the maze.
-         *
-         * The Renderer reads this value to decide how the
-         * current level should look.
-         *
-         * Level 1:
-         *     "Digital World"
-         *
-         * Level 2:
-         *     "Forgotten Jungle"
-         *
-         * Level 3:
-         *     "Frozen Wilderness"
-         *
-         * Level 4:
-         *     "Forgotten Palace"
-         *
          */
+
+        this.maze.safeRouteAttempts =
+            level.safeRouteAttempts || 30;
+
 
         this.maze.theme =
             level.theme;
@@ -212,8 +255,6 @@ class Game {
          * =========================================================
          * PLAYER
          * =========================================================
-         *
-         * Keep the existing Player API.
          */
 
         this.player =
@@ -224,115 +265,216 @@ class Game {
 
         /*
          * =========================================================
-         * RANDOM SAFE ROUTE + RANDOM HIDDEN TRIGGERS
+         * RESET HAZARDS
          * =========================================================
-         *
-         * Every fresh load generates a new gameplay layout from the
-         * EXISTING physical maze. The map strings are never changed.
-         *
-         * Maze chooses:
-         *   1. one S -> E route that contains no triggers
-         *   2. one hidden trigger on EVERY competing S -> E route
-         *   3. six maze steps of spawn clearance; those steps may turn
-         *
-         * The triggers are created now, but remain invisible until
-         * the player actually steps on one.
          */
 
-        this.hazardTemplates = [];
-        this.hazards = [];
+        this.hazardTemplates =
+            [];
+
+        this.hazards =
+            [];
+
         this.trapTriggeredCells.clear();
 
+
         /*
-         * One route is safe for this entire round. Every other actual
-         * S -> E route receives one hidden trigger. There is deliberately
-         * NO maxTriggers cap here: a cap would violate the mandatory
-         * one-trigger-per-non-safe-route rule.
+         * =========================================================
+         * SAFE ROUTE
+         * =========================================================
          */
+
         const recentSafeRoutes =
-            this.recentSafeRouteSignatures.get(level.id) || [];
+            this.recentSafeRouteSignatures.get(
+                level.id
+            ) || [];
+
 
         const routePlan =
             this.maze.chooseRandomEscapeRoute(
                 recentSafeRoutes
             );
 
-        if (routePlan.path && routePlan.path.length) {
+
+        /*
+         * Remember the selected safe route.
+         */
+
+        if (
+            routePlan.path &&
+            routePlan.path.length
+        ) {
+
             const signature =
-                this.maze.routeSignature(routePlan.path);
+                this.maze.routeSignature(
+                    routePlan.path
+                );
+
 
             const updatedHistory = [
-                ...recentSafeRoutes.filter(item => item !== signature),
+
+                ...recentSafeRoutes.filter(
+                    item =>
+                        item !== signature
+                ),
+
                 signature
+
             ].slice(-5);
+
 
             this.recentSafeRouteSignatures.set(
                 level.id,
                 updatedHistory
             );
+
         }
+
 
         this.randomEscapePath =
             routePlan.path || [];
 
+
         /*
-         * Store the level's chase settings in one template. There are
-         * no fixed trigger coordinates in levels.js anymore.
+         * =========================================================
+         * CHASE SETTINGS
+         * =========================================================
          */
+
         const chaseTemplate = {
-            spawnDistance: level.spawnDistance || 6,
-            warningTime: level.warningTime || 1500,
-            speed: level.speed || 3.5,
-            maxDuration: level.maxDuration || 3,
-            maxDistance: level.maxDistance || 10
+
+            spawnDistance:
+                level.spawnDistance || 6,
+
+            warningTime:
+                level.warningTime || 1500,
+
+            speed:
+                level.speed || 3.5,
+
+            maxDuration:
+                level.maxDuration || 3,
+
+            maxDistance:
+                level.maxDistance || 10
+
         };
 
-        this.hazardTemplates = [chaseTemplate];
+
+        this.hazardTemplates =
+            [
+                chaseTemplate
+            ];
+
+
+        /*
+         * =========================================================
+         * CREATE HIDDEN TRIGGERS
+         * =========================================================
+         */
 
         this.hazards =
-            (routePlan.gates || []).map((gate, index) => {
-                return new ChaseBlock(
-                    this.maze,
-                    {
-                        ...chaseTemplate,
-                        id: `random-route-${level.id}-${index + 1}`,
-                        trigger: {
-                            x: gate.x,
-                            y: gate.y
-                        },
-                        routeIndex: gate.routeIndex,
-                        plannedDirection: gate.direction
-                            ? { x: gate.direction.x, y: gate.direction.y }
-                            : null,
-                        plannedSpawn: gate.spawn
-                            ? { x: gate.spawn.x, y: gate.spawn.y }
-                            : null,
-                        plannedSpawnPath: gate.spawnPath
-                            ? gate.spawnPath.map(point => ({ x: point.x, y: point.y }))
-                            : []
-                    }
-                );
-            });
+            (
+                routePlan.gates ||
+                []
+            ).map(
+                (
+                    gate,
+                    index
+                ) => {
+
+                    return new ChaseBlock(
+
+                        this.maze,
+
+                        {
+
+                            ...chaseTemplate,
+
+                            id:
+                                `random-route-${level.id}-${index + 1}`,
+
+                            trigger: {
+
+                                x:
+                                    gate.x,
+
+                                y:
+                                    gate.y
+
+                            },
+
+                            routeIndex:
+                                gate.routeIndex,
+
+                            plannedDirection:
+                                gate.direction
+                                    ? {
+
+                                        x:
+                                            gate.direction.x,
+
+                                        y:
+                                            gate.direction.y
+
+                                    }
+                                    : null,
+
+                            plannedSpawn:
+                                gate.spawn
+                                    ? {
+
+                                        x:
+                                            gate.spawn.x,
+
+                                        y:
+                                            gate.spawn.y
+
+                                    }
+                                    : null,
+
+                            plannedSpawnPath:
+                                gate.spawnPath
+                                    ? gate.spawnPath.map(
+                                        point => ({
+
+                                            x:
+                                                point.x,
+
+                                            y:
+                                                point.y
+
+                                        })
+                                    )
+                                    : []
+
+                        }
+
+                    );
+
+                }
+            );
+
 
         console.info(
-            `[Maze Escape] Level ${level.id}: ${routePlan.routeCount || 0} actual S->E routes; safe route index = ${routePlan.safeRouteIndex}; non-safe routes = ${routePlan.nonSafeRouteCount || 0}; hidden triggers = ${this.hazards.length}`
-        );
 
-        this.trapTriggeredCells.clear();
+            `[Maze Escape] Level ${level.id}: ` +
+
+            `${routePlan.routeCount || 0} actual S->E routes; ` +
+
+            `safe route index = ${routePlan.safeRouteIndex}; ` +
+
+            `non-safe routes = ${routePlan.nonSafeRouteCount || 0}; ` +
+
+            `hidden triggers = ${this.hazards.length}`
+
+        );
 
 
         /*
          * =========================================================
          * RENDERER
          * =========================================================
-         *
-         * The Renderer automatically checks:
-         *
-         *     this.maze.theme
-         *
-         * and changes the visual appearance accordingly.
-         *
-         * The actual gameplay logic is unchanged.
          */
 
         this.renderer =
@@ -344,7 +486,7 @@ class Game {
 
         /*
          * =========================================================
-         * RESET GAME STATE
+         * RESET LEVEL STATE
          * =========================================================
          */
 
@@ -372,10 +514,27 @@ class Game {
             null;
 
 
-        /*
-         * Every level gets a fresh set of trigger events.
-         */
         this.triggeredEvents.clear();
+
+
+        this.trapTriggeredCells.clear();
+
+
+        /*
+         * Remove any first-encounter overlay left from an
+         * interrupted level.
+         */
+
+        if (
+            this.firstEncounterOverlay
+        ) {
+
+            this.firstEncounterOverlay.remove();
+
+            this.firstEncounterOverlay =
+                null;
+
+        }
 
 
         /*
@@ -398,7 +557,7 @@ class Game {
 
         /*
          * =========================================================
-         * RESET OVERLAYS
+         * HIDE OLD UI
          * =========================================================
          */
 
@@ -414,6 +573,7 @@ class Game {
         /*
          * Stop any previous chase audio.
          */
+
         if (
             window.gameAudio &&
             window.gameAudio.stopChase
@@ -425,8 +585,9 @@ class Game {
 
 
         /*
-         * Immediately draw the freshly loaded level.
+         * Draw the newly loaded level immediately.
          */
+
         this.render();
 
     }
@@ -440,12 +601,9 @@ class Game {
 
     gameLoop(currentTime) {
 
-        /*
-         * If the game was exited, stop this loop.
-         *
-         * restartLevel() creates a fresh loop.
-         */
-        if (!this.running) {
+        if (
+            !this.running
+        ) {
 
             return;
 
@@ -453,8 +611,9 @@ class Game {
 
 
         /*
-         * Calculate frame time.
+         * Calculate elapsed frame time.
          */
+
         let deltaTime =
             (
                 currentTime -
@@ -467,8 +626,9 @@ class Game {
 
 
         /*
-         * Prevent huge time jumps.
+         * Prevent very large frame jumps.
          */
+
         deltaTime =
             Math.min(
                 Math.max(
@@ -484,12 +644,12 @@ class Game {
          * PAUSED
          * =========================================================
          *
-         * While paused:
+         * This is used by:
          *
-         * - timer stops
-         * - player stops
-         * - hazards stop
+         * - ESC pause
+         * - FIRST wrong-route warning
          *
+         * In both cases the timer stops.
          */
 
         if (
@@ -517,143 +677,8 @@ class Game {
 
         /*
          * =========================================================
-         * WARNING
+         * GAME OVER / COMPLETE
          * =========================================================
-         *
-         * IMPORTANT:
-         *
-         * The warning timer is separate from the main
-         * level timer.
-         *
-         * Therefore the player gets the full warning period
-         * without losing game time.
-         */
-
-        if (
-            this.warningActive
-        ) {
-
-            this.warningRemaining -=
-                deltaTime;
-
-
-            /*
-             * Warning finished.
-             */
-            if (
-                this.warningRemaining <=
-                0
-            ) {
-
-                this.warningRemaining =
-                    0;
-
-
-                this.warningActive =
-                    false;
-
-
-                this.ui.hideWarning();
-
-
-                /*
-                 * =================================================
-                 * SPAWN GHOST
-                 * =================================================
-                 */
-
-                if (
-                    this.pendingHazard
-                ) {
-
-                    const hazard =
-                        this.pendingHazard;
-
-
-                    this.pendingHazard =
-                        null;
-
-
-                    /*
-                     * Ghost appears at the position calculated
-                     * when the player entered the trigger.
-                     */
-                    hazard.beginChase();
-
-
-                    /*
-                     * Audio.
-                     */
-                    if (
-                        window.gameAudio
-                    ) {
-
-                        if (
-                            window.gameAudio
-                                .blockAppear
-                        ) {
-
-                            window.gameAudio
-                                .blockAppear();
-
-                        }
-
-
-                        if (
-                            window.gameAudio
-                                .chaseStart
-                        ) {
-
-                            window.gameAudio
-                                .chaseStart();
-
-                        }
-
-                    }
-
-                }
-
-
-                /*
-                 * Reset the frame clock so that the warning
-                 * duration does not accidentally become a
-                 * giant frame delta.
-                 */
-                this.lastTime =
-                    performance.now();
-
-            }
-
-
-            /*
-             * Draw warning / current scene.
-             */
-            this.render();
-
-
-            requestAnimationFrame(
-                (time) => {
-
-                    this.gameLoop(
-                        time
-                    );
-
-                }
-            );
-
-
-            return;
-
-        }
-
-
-        /*
-         * =========================================================
-         * GAME OVER / COMPLETE SCREEN
-         * =========================================================
-         *
-         * Keep rendering the final scene while the overlay
-         * is visible.
          */
 
         if (
@@ -681,7 +706,7 @@ class Game {
 
         /*
          * =========================================================
-         * LEVEL TIMER
+         * TIMER
          * =========================================================
          */
 
@@ -689,9 +714,6 @@ class Game {
             deltaTime;
 
 
-        /*
-         * Time expired.
-         */
         if (
             this.remainingTime <=
             0
@@ -723,7 +745,23 @@ class Game {
 
         /*
          * =========================================================
-         * PLAYER
+         * NORMAL WARNING
+         * =========================================================
+         *
+         * IMPORTANT:
+         *
+         * There is NO countdown here anymore.
+         *
+         * startHazardWarning() starts the ghost immediately.
+         *
+         * This block intentionally remains empty because the
+         * previous delayed-warning system has been removed.
+         */
+
+
+        /*
+         * =========================================================
+         * PLAYER MOVEMENT
          * =========================================================
          */
 
@@ -738,9 +776,6 @@ class Game {
         };
 
 
-        /*
-         * Keep the existing Player API.
-         */
         this.player.update(
             window.keys || {},
             currentTime
@@ -751,30 +786,6 @@ class Game {
          * =========================================================
          * ACTUAL MOVEMENT DIRECTION
          * =========================================================
-         *
-         * This is IMPORTANT for dynamic ghost spawning.
-         *
-         * Example:
-         *
-         * Player moves RIGHT onto trigger:
-         *
-         *     PLAYER ---> TRIGGER
-         *
-         * Ghost spawns:
-         *
-         *     PLAYER ---> TRIGGER ---> GHOST
-         *
-         *
-         * Player moves DOWN onto trigger:
-         *
-         *          PLAYER
-         *             |
-         *             v
-         *          TRIGGER
-         *             |
-         *             v
-         *           GHOST
-         *
          */
 
         const movedDirection = {
@@ -796,7 +807,7 @@ class Game {
 
         /*
          * =========================================================
-         * CHASE TRIGGERS
+         * CHECK HIDDEN TRIGGERS
          * =========================================================
          */
 
@@ -811,41 +822,7 @@ class Game {
 
         /*
          * =========================================================
-         * WARNING STARTED THIS FRAME
-         * =========================================================
-         *
-         * Stop immediately.
-         *
-         * This ensures the player cannot move another frame
-         * after activating the trigger.
-         */
-
-        if (
-            this.warningActive
-        ) {
-
-            this.render();
-
-
-            requestAnimationFrame(
-                (time) => {
-
-                    this.gameLoop(
-                        time
-                    );
-
-                }
-            );
-
-
-            return;
-
-        }
-
-
-        /*
-         * =========================================================
-         * HAZARDS
+         * UPDATE GHOSTS
          * =========================================================
          */
 
@@ -854,19 +831,25 @@ class Game {
             this.hazards
         ) {
 
-            /*
-             * Remember whether it was chasing before update.
-             */
+            if (
+                !hazard
+            ) {
+
+                continue;
+
+            }
+
+
             const wasChasing =
                 hazard.isChasing();
 
 
             /*
-             * Update ghost movement.
+             * Update chasing ghost.
              *
-             * The ChaseBlock itself follows Maze.findPath(),
-             * so it cannot move through walls.
+             * Blocking ghost simply remains stationary.
              */
+
             hazard.update(
 
                 deltaTime,
@@ -880,12 +863,49 @@ class Game {
              * =====================================================
              * PLAYER CAUGHT
              * =====================================================
+             *
+             * IMPORTANT:
+             *
+             * This collision check runs for BOTH:
+             *
+             *     chasing ghosts
+             *     blocking/stationary ghosts
              */
 
-            if (
+            const ghostCollision =
                 hazard.isColliding(
                     this.player
-                )
+                );
+
+
+            /*
+             * Extra explicit stationary-ghost collision check.
+             *
+             * This guarantees that a ghost which has finished
+             * chasing and is permanently blocking a trigger tile
+             * is still lethal when the player touches it.
+             */
+
+            const stationaryGhostCollision =
+
+                hazard.isBlocking() &&
+
+                hazard.active &&
+
+                Math.abs(
+                    hazard.x -
+                    this.player.x
+                ) < 0.55 &&
+
+                Math.abs(
+                    hazard.y -
+                    this.player.y
+                ) < 0.55;
+
+
+            if (
+                ghostCollision ||
+                stationaryGhostCollision
             ) {
 
                 this.failLevel(
@@ -902,9 +922,6 @@ class Game {
              * =====================================================
              * CHASE ENDED
              * =====================================================
-             *
-             * The ghost now remains permanently on the
-             * trigger tile.
              */
 
             if (
@@ -930,8 +947,6 @@ class Game {
          * =========================================================
          * EXIT
          * =========================================================
-         *
-         * Player must reach the E tile.
          */
 
         if (
@@ -945,7 +960,6 @@ class Game {
         ) {
 
             this.finishLevel();
-
 
             return;
 
@@ -962,7 +976,7 @@ class Game {
 
 
         /*
-         * Continue loop.
+         * Continue animation loop.
          */
 
         requestAnimationFrame(
@@ -980,7 +994,7 @@ class Game {
 
     /*
      * =============================================================
-     * CHASE TRIGGER CHECK
+     * CHECK CHASE TRIGGERS
      * =============================================================
      */
 
@@ -989,9 +1003,22 @@ class Game {
         movedDirection
     ) {
 
-        if (this.warningActive) {
+        /*
+         * Never activate another trigger while a normal warning
+         * is already active.
+         *
+         * Normally warningActive is false because the ghost now
+         * starts immediately.
+         */
+
+        if (
+            this.warningActive
+        ) {
+
             return;
+
         }
+
 
         if (
             !movedDirection ||
@@ -1000,98 +1027,873 @@ class Game {
                 movedDirection.y === 0
             )
         ) {
+
             return;
+
         }
 
-        const x = this.player.x;
-        const y = this.player.y;
-        const cellKey = `${x},${y}`;
+
+        const x =
+            this.player.x;
+
+        const y =
+            this.player.y;
+
 
         /*
-         * Check only the trigger cells that were randomly generated
-         * when this run started.
-         *
-         * This is the critical difference from the previous version:
-         * simply stepping onto ANY off-safe-route cell no longer creates
-         * a trap. Only a hidden trigger selected by Maze can activate.
+         * Check the randomly generated trigger tiles.
          */
-        for (const hazard of this.hazards) {
 
-            if (!hazard || !hazard.isWaiting()) {
+        for (
+            const hazard of
+            this.hazards
+        ) {
+
+            if (
+                !hazard ||
+                !hazard.isWaiting()
+            ) {
+
                 continue;
+
             }
+
 
             const triggerKey =
                 `${hazard.trigger.x},${hazard.trigger.y}`;
 
-            if (this.trapTriggeredCells.has(triggerKey)) {
+
+            if (
+                this.trapTriggeredCells.has(
+                    triggerKey
+                )
+            ) {
+
                 continue;
+
             }
+
 
             if (
                 x !== hazard.trigger.x ||
                 y !== hazard.trigger.y
             ) {
+
                 continue;
+
+            }
+
+
+            /*
+             * Prepare the ghost spawn using the player's ACTUAL
+             * approach direction.
+             */
+
+            const prepared =
+                hazard.prepareSpawn(
+                    movedDirection
+                );
+
+
+            if (
+                !prepared
+            ) {
+
+                console.warn(
+
+                    `[Maze Escape] Trigger ${triggerKey} ` +
+                    `could not prepare a six-tile spawn.`
+
+                );
+
+
+                continue;
+
+            }
+
+
+            /*
+             * Mark this trigger permanently activated.
+             */
+
+            this.trapTriggeredCells.add(
+                triggerKey
+            );
+
+
+            this.triggeredEvents.add(
+                hazard.config.id
+            );
+
+
+            /*
+             * =====================================================
+             * FIRST WRONG-ROUTE ENCOUNTER
+             * =====================================================
+             *
+             * ONLY the first encounter of the entire game:
+             *
+             *     pause
+             *     center warning
+             *     CONTINUE
+             *     ghost starts
+             */
+
+            if (
+                !this.firstEncounterWarningShown
+            ) {
+
+                this.startFirstEncounterWarning(
+                    hazard
+                );
+
             }
 
             /*
-             * IMPORTANT:
+             * =====================================================
+             * ALL LATER ENCOUNTERS
+             * =====================================================
              *
-             * Pass the player's ACTUAL movement direction.
-             * Never pass previousPlayerPosition as the spawn direction.
+             * No waiting period anymore.
+             *
+             * Red flash + warning sound + ghost immediately.
              */
-            const prepared =
-                hazard.prepareSpawn(movedDirection);
 
-            if (!prepared) {
-                /*
-                 * Trigger generation already guarantees six clear tiles,
-                 * so reaching this branch indicates an unexpected state.
-                 * Do not invent a different trigger position here.
-                 */
-                console.warn(
-                    `[Maze Escape] Trigger ${triggerKey} could not prepare a six-tile spawn.`
+            else {
+
+                this.startHazardWarning(
+                    hazard
                 );
-                continue;
+
             }
 
-            this.trapTriggeredCells.add(triggerKey);
-            this.triggeredEvents.add(hazard.config.id);
 
-            this.startHazardWarning(hazard);
-
-            /* Only one warning/chase can begin at a time. */
             break;
+
         }
+
     }
 
-    startHazardWarning(hazard) {
+
+    /*
+     * =============================================================
+     * FIRST ENCOUNTER WARNING
+     * =============================================================
+     *
+     * This is shown ONLY ONCE for the entire game session.
+     *
+     * The game is completely paused until CONTINUE is pressed.
+     */
+
+    startFirstEncounterWarning(hazard) {
+
+        this.firstEncounterWarningShown =
+            true;
+
 
         this.pendingHazard =
             hazard;
 
+
+        /*
+         * Normal warning is not needed here.
+         */
+
         this.warningActive =
-            true;
+            false;
+
 
         this.warningRemaining =
-            (
-                hazard.config.warningTime ||
-                1500
-            ) / 1000;
+            0;
 
-        this.ui.setWarningText(
-            "SOMETHING IS COMING"
+
+        /*
+         * PAUSE THE ENTIRE GAME.
+         *
+         * This also stops the timer because gameLoop() returns
+         * from the paused section.
+         */
+
+        this.paused =
+            true;
+
+
+        this.ui.hideWarning();
+
+
+        /*
+         * Remove an old copy if one somehow exists.
+         */
+
+        const oldOverlay =
+            document.getElementById(
+                "maze-first-encounter-warning"
+            );
+
+
+        if (
+            oldOverlay
+        ) {
+
+            oldOverlay.remove();
+
+        }
+
+
+        /*
+         * =========================================================
+         * CREATE CENTER WARNING
+         * =========================================================
+         */
+
+        const overlay =
+            document.createElement(
+                "div"
+            );
+
+
+        overlay.id =
+            "maze-first-encounter-warning";
+
+
+        overlay.setAttribute(
+            "role",
+            "dialog"
         );
 
-        this.ui.showWarning();
+
+        overlay.setAttribute(
+            "aria-modal",
+            "true"
+        );
+
+
+        overlay.innerHTML = `
+
+            <div class="maze-first-warning-card">
+
+                <div class="maze-first-warning-icon">
+                    ⚠
+                </div>
+
+                <div class="maze-first-warning-title">
+                    WRONG ROUTE
+                </div>
+
+                <div class="maze-first-warning-text">
+                    You took a wrong route.<br>
+                    Get ready for the haunting.
+                </div>
+
+                <div class="maze-first-warning-coming">
+                    SOMETHING<br>
+                    IS COMING
+                </div>
+
+                <button
+                    type="button"
+                    id="maze-first-warning-continue"
+                >
+                    CONTINUE
+                </button>
+
+            </div>
+
+        `;
+
+
+        /*
+         * =========================================================
+         * FULLSCREEN OVERLAY
+         * ========================================================= */
+
+        overlay.style.position =
+            "fixed";
+
+        overlay.style.inset =
+            "0";
+
+        overlay.style.zIndex =
+            "99999";
+
+        overlay.style.display =
+            "flex";
+
+        overlay.style.alignItems =
+            "center";
+
+        overlay.style.justifyContent =
+            "center";
+
+        overlay.style.padding =
+            "24px";
+
+        overlay.style.boxSizing =
+            "border-box";
+
+        overlay.style.background =
+            "rgba(0, 0, 0, 0.84)";
+
+        overlay.style.backdropFilter =
+            "blur(5px)";
+
+        overlay.style.fontFamily =
+            "Arial, Helvetica, sans-serif";
+
+
+        /*
+         * =========================================================
+         * WARNING CARD
+         * ========================================================= */
+
+        const card =
+            overlay.querySelector(
+                ".maze-first-warning-card"
+            );
+
+
+        card.style.width =
+            "min(560px, 92vw)";
+
+
+        card.style.boxSizing =
+            "border-box";
+
+
+        card.style.padding =
+            "42px 36px 34px";
+
+
+        card.style.textAlign =
+            "center";
+
+
+        card.style.background =
+            "rgba(10, 5, 8, 0.98)";
+
+
+        card.style.border =
+            "2px solid rgba(255, 50, 65, 0.9)";
+
+
+        card.style.borderRadius =
+            "14px";
+
+
+        card.style.boxShadow =
+            "0 0 45px rgba(255, 0, 30, 0.35), 0 20px 80px rgba(0, 0, 0, 0.75)";
+
+
+        card.style.color =
+            "#ffffff";
+
+
+        /*
+         * =========================================================
+         * WARNING ICON
+         * ========================================================= */
+
+        const icon =
+            overlay.querySelector(
+                ".maze-first-warning-icon"
+            );
+
+
+        icon.style.fontSize =
+            "44px";
+
+
+        icon.style.lineHeight =
+            "1";
+
+
+        icon.style.marginBottom =
+            "14px";
+
+
+        /*
+         * =========================================================
+         * WRONG ROUTE TITLE
+         * ========================================================= */
+
+        const title =
+            overlay.querySelector(
+                ".maze-first-warning-title"
+            );
+
+
+        title.style.fontSize =
+            "30px";
+
+
+        title.style.fontWeight =
+            "900";
+
+
+        title.style.letterSpacing =
+            "4px";
+
+
+        title.style.marginBottom =
+            "16px";
+
+
+        /*
+         * =========================================================
+         * DESCRIPTION
+         * ========================================================= */
+
+        const text =
+            overlay.querySelector(
+                ".maze-first-warning-text"
+            );
+
+
+        text.style.fontSize =
+            "18px";
+
+
+        text.style.lineHeight =
+            "1.7";
+
+
+        text.style.color =
+            "rgba(255,255,255,0.86)";
+
+
+        text.style.marginBottom =
+            "24px";
+
+
+        /*
+         * =========================================================
+         * SOMETHING IS COMING
+         * ========================================================= */
+
+        const coming =
+            overlay.querySelector(
+                ".maze-first-warning-coming"
+            );
+
+
+        coming.style.fontSize =
+            "32px";
+
+
+        coming.style.lineHeight =
+            "1.08";
+
+
+        coming.style.fontWeight =
+            "900";
+
+
+        coming.style.letterSpacing =
+            "5px";
+
+
+        coming.style.margin =
+            "10px 0 30px";
+
+
+        coming.style.color =
+            "#ff3347";
+
+
+        coming.style.textShadow =
+            "0 0 18px rgba(255, 0, 30, 0.75)";
+
+
+        /*
+         * =========================================================
+         * CONTINUE BUTTON
+         * ========================================================= */
+
+        const continueButton =
+            overlay.querySelector(
+                "#maze-first-warning-continue"
+            );
+
+
+        continueButton.style.border =
+            "1px solid rgba(255,255,255,0.5)";
+
+
+        continueButton.style.borderRadius =
+            "7px";
+
+
+        continueButton.style.padding =
+            "13px 34px";
+
+
+        continueButton.style.fontSize =
+            "15px";
+
+
+        continueButton.style.fontWeight =
+            "800";
+
+
+        continueButton.style.letterSpacing =
+            "2px";
+
+
+        continueButton.style.cursor =
+            "pointer";
+
+
+        continueButton.style.color =
+            "#ffffff";
+
+
+        continueButton.style.background =
+            "rgba(255, 35, 55, 0.18)";
+
+
+        continueButton.style.boxShadow =
+            "0 0 18px rgba(255, 0, 30, 0.2)";
+
+
+        /*
+         * CONTINUE CLICK
+         */
+
+        continueButton.addEventListener(
+            "click",
+            () => {
+
+                this.continueAfterFirstEncounter();
+
+            }
+        );
+
+
+        /*
+         * ENTER / SPACE can also continue.
+         */
+
+        overlay.addEventListener(
+            "keydown",
+            (event) => {
+
+                if (
+                    event.key === "Enter" ||
+                    event.key === " "
+                ) {
+
+                    event.preventDefault();
+
+                    this.continueAfterFirstEncounter();
+
+                }
+
+            }
+        );
+
+
+        /*
+         * Add overlay to document.
+         */
+
+        document.body.appendChild(
+            overlay
+        );
+
+
+        this.firstEncounterOverlay =
+            overlay;
+
+
+        /*
+         * Focus CONTINUE automatically.
+         */
+
+        setTimeout(
+            () => {
+
+                if (
+                    continueButton
+                ) {
+
+                    continueButton.focus();
+
+                }
+
+            },
+            0
+        );
+
+
+        /*
+         * Warning sound.
+         */
 
         if (
             window.gameAudio &&
             window.gameAudio.warning
         ) {
+
             window.gameAudio.warning();
+
         }
+
+    }
+
+
+    /*
+     * =============================================================
+     * CONTINUE AFTER FIRST ENCOUNTER
+     * =============================================================
+     */
+
+    continueAfterFirstEncounter() {
+
+        /*
+         * Only valid while the first warning is pausing the game.
+         */
+
+        if (
+            !this.paused
+        ) {
+
+            return;
+
+        }
+
+
+        /*
+         * Remove warning overlay.
+         */
+
+        if (
+            this.firstEncounterOverlay
+        ) {
+
+            this.firstEncounterOverlay.remove();
+
+            this.firstEncounterOverlay =
+                null;
+
+        }
+
+        else {
+
+            const overlay =
+                document.getElementById(
+                    "maze-first-encounter-warning"
+                );
+
+
+            if (
+                overlay
+            ) {
+
+                overlay.remove();
+
+            }
+
+        }
+
+
+        /*
+         * Resume game.
+         */
+
+        this.paused =
+            false;
+
+
+        /*
+         * Start the ghost immediately after CONTINUE.
+         */
+
+        if (
+            this.pendingHazard
+        ) {
+
+            const hazard =
+                this.pendingHazard;
+
+
+            this.pendingHazard =
+                null;
+
+
+            hazard.beginChase();
+
+
+            /*
+             * Chase audio.
+             */
+
+            if (
+                window.gameAudio
+            ) {
+
+                if (
+                    window.gameAudio.blockAppear
+                ) {
+
+                    window.gameAudio.blockAppear();
+
+                }
+
+
+                if (
+                    window.gameAudio.chaseStart
+                ) {
+
+                    window.gameAudio.chaseStart();
+
+                }
+
+            }
+
+        }
+
+
+        /*
+         * Reset frame timing so the paused time is not counted
+         * against the timer.
+         */
+
+        this.lastTime =
+            performance.now();
+
+
+        this.render();
+
+    }
+
+
+    /*
+     * =============================================================
+     * NORMAL HAZARD WARNING
+     * =============================================================
+     *
+     * IMPORTANT:
+     *
+     * This no longer waits for warningTime.
+     *
+     * The warning sound, ghost appearance and chase all start
+     * immediately.
+     */
+
+    startHazardWarning(hazard) {
+
+        /*
+         * There is no pending delayed hazard anymore.
+         */
+
+        this.pendingHazard =
+            null;
+
+
+        this.warningActive =
+            false;
+
+
+        this.warningRemaining =
+            0;
+
+
+        /*
+         * =========================================================
+         * RED WARNING FLASH
+         * =========================================================
+         */
+
+        this.ui.setWarningText(
+            "⚠  SOMETHING IS COMING"
+        );
+
+
+        this.ui.showWarning();
+
+
+        /*
+         * =========================================================
+         * WARNING SOUND
+         * =========================================================
+         *
+         * This plays immediately when the trigger is reached.
+         */
+
+        if (
+            window.gameAudio &&
+            window.gameAudio.warning
+        ) {
+
+            window.gameAudio.warning();
+
+        }
+
+
+        /*
+         * =========================================================
+         * GHOST STARTS IMMEDIATELY
+         * =========================================================
+         */
+
+        hazard.beginChase();
+
+
+        /*
+         * =========================================================
+         * GHOST APPEAR + CHASE AUDIO
+         * ========================================================= */
+
+        if (
+            window.gameAudio
+        ) {
+
+            if (
+                window.gameAudio.blockAppear
+            ) {
+
+                window.gameAudio.blockAppear();
+
+            }
+
+
+            if (
+                window.gameAudio.chaseStart
+            ) {
+
+                window.gameAudio.chaseStart();
+
+            }
+
+        }
+
+
+        /*
+         * =========================================================
+         * HIDE THE WARNING FLASH
+         * =========================================================
+         *
+         * The flash is only visual.
+         *
+         * It does NOT delay the ghost.
+         */
+
+        setTimeout(
+            () => {
+
+                if (
+                    this.running &&
+                    !this.gameOver
+                ) {
+
+                    this.ui.hideWarning();
+
+                }
+
+            },
+            350
+        );
+
     }
 
 
@@ -1099,19 +1901,6 @@ class Game {
      * =============================================================
      * RENDER
      * =============================================================
-     *
-     * IMPORTANT:
-     *
-     * Do not draw anything manually here.
-     *
-     * Your existing Renderer handles:
-     *
-     * - maze
-     * - walls
-     * - door / exit
-     * - player
-     * - ghost
-     *
      */
 
     render() {
@@ -1126,9 +1915,6 @@ class Game {
         }
 
 
-        /*
-         * Keep the existing Renderer API.
-         */
         this.renderer.draw(
 
             this.player,
@@ -1149,8 +1935,18 @@ class Game {
     pause() {
 
         /*
-         * Do not pause twice.
+         * Do not replace the special first encounter warning.
          */
+
+        if (
+            this.firstEncounterOverlay
+        ) {
+
+            return;
+
+        }
+
+
         if (
 
             this.paused ||
@@ -1170,13 +1966,6 @@ class Game {
             true;
 
 
-        /*
-         * Show pause menu.
-         *
-         * Continue button calls resume().
-         *
-         * Exit button calls exitToMenu().
-         */
         this.ui.showPause(
 
             () =>
@@ -1191,6 +1980,7 @@ class Game {
         /*
          * Pause audio.
          */
+
         if (
 
             window.gameAudio &&
@@ -1214,6 +2004,20 @@ class Game {
 
     resume() {
 
+        /*
+         * Never resume through the normal pause button while
+         * first-encounter warning is active.
+         */
+
+        if (
+            this.firstEncounterOverlay
+        ) {
+
+            return;
+
+        }
+
+
         if (
             !this.paused
         ) {
@@ -1231,11 +2035,9 @@ class Game {
 
 
         /*
-         * Reset frame clock.
-         *
-         * This prevents the time spent in the pause menu
-         * from being counted as gameplay time.
+         * Reset timing.
          */
+
         this.lastTime =
             performance.now();
 
@@ -1243,6 +2045,7 @@ class Game {
         /*
          * Resume audio.
          */
+
         if (
 
             window.gameAudio &&
@@ -1266,13 +2069,63 @@ class Game {
 
     finishLevel() {
 
+        /*
+         * Prevent the exit tile from calling finishLevel repeatedly.
+         */
+
+        if (
+            this.levelFinished
+        ) {
+
+            return;
+
+        }
+
+
+        this.levelFinished =
+            true;
+
+
+        /*
+         * Remove first warning if necessary.
+         */
+
+        if (
+            this.firstEncounterOverlay
+        ) {
+
+            this.firstEncounterOverlay.remove();
+
+            this.firstEncounterOverlay =
+                null;
+
+        }
+
+
+        this.paused =
+            false;
+
+
+        this.warningActive =
+            false;
+
+
+        this.warningRemaining =
+            0;
+
+
+        this.pendingHazard =
+            null;
+
+
         this.gameOver =
             true;
 
 
         /*
-         * Stop chase audio first.
+         * Stop chase audio and play completion sound.
          */
+
         if (
             window.gameAudio
         ) {
@@ -1317,9 +2170,6 @@ class Game {
             );
 
 
-            /*
-             * Button says NEXT LEVEL.
-             */
             this.ui.setRestartAction(
                 () => {
 
@@ -1332,7 +2182,11 @@ class Game {
                 }
             );
 
+
+            return;
+
         }
+
 
         /*
          * =========================================================
@@ -1340,38 +2194,35 @@ class Game {
          * =========================================================
          */
 
-        else {
+        if (
 
-            if (
+            window.gameAudio &&
 
-                window.gameAudio &&
+            window.gameAudio.gameComplete
 
-                window.gameAudio.gameComplete
+        ) {
 
-            ) {
-
-                window.gameAudio.gameComplete();
-
-            }
-
-
-            this.ui.showGameComplete();
-
-
-            /*
-             * PLAY AGAIN starts Level 1 again.
-             */
-            this.ui.setRestartAction(
-                () => {
-
-                    this.restartLevel(
-                        0
-                    );
-
-                }
-            );
+            window.gameAudio.gameComplete();
 
         }
+
+
+        this.ui.showGameComplete();
+
+
+        /*
+         * PLAY AGAIN starts from Level 1.
+         */
+
+        this.ui.setRestartAction(
+            () => {
+
+                this.restartLevel(
+                    0
+                );
+
+            }
+        );
 
     }
 
@@ -1385,8 +2236,29 @@ class Game {
     failLevel(message) {
 
         /*
+         * Remove first encounter warning if necessary.
+         */
+
+        if (
+            this.firstEncounterOverlay
+        ) {
+
+            this.firstEncounterOverlay.remove();
+
+            this.firstEncounterOverlay =
+                null;
+
+        }
+
+
+        this.paused =
+            false;
+
+
+        /*
          * Prevent duplicate game-over calls.
          */
+
         if (
             this.gameOver
         ) {
@@ -1401,8 +2273,28 @@ class Game {
 
 
         /*
-         * Stop chase and play appropriate sound.
+         * Stop warning state.
          */
+
+        this.warningActive =
+            false;
+
+
+        this.warningRemaining =
+            0;
+
+
+        this.pendingHazard =
+            null;
+
+
+        this.ui.hideWarning();
+
+
+        /*
+         * Audio.
+         */
+
         if (
             window.gameAudio
         ) {
@@ -1428,7 +2320,9 @@ class Game {
 
                 }
 
-            } else {
+            }
+
+            else {
 
                 if (
                     window.gameAudio.caught
@@ -1446,14 +2340,16 @@ class Game {
         /*
          * Show GAME OVER.
          */
+
         this.ui.showGameOver(
             message
         );
 
 
         /*
-         * PLAY AGAIN restarts the current level.
+         * Restart current level.
          */
+
         this.ui.setRestartAction(
             () => {
 
@@ -1473,31 +2369,71 @@ class Game {
      * =============================================================
      * RESTART LEVEL
      * =============================================================
-     *
-     * This fixes:
-     *
-     * PLAY AGAIN -> game stuck
-     *
-     * because loadLevel() alone does not restart an animation
-     * loop when running was previously false.
-     *
      */
 
     restartLevel(index) {
 
         /*
-         * Stop the old game loop logically.
+         * Restarting Level 1 means a completely new game.
          *
-         * Any old requestAnimationFrame that is still pending
-         * will see the new state on its next execution.
+         * Therefore the special first encounter warning can appear
+         * again.
          */
+
+        if (
+            index === 0
+        ) {
+
+            this.firstEncounterWarningShown =
+                false;
+
+        }
+
+
+        /*
+         * Remove special warning overlay.
+         */
+
+        if (
+            this.firstEncounterOverlay
+        ) {
+
+            this.firstEncounterOverlay.remove();
+
+            this.firstEncounterOverlay =
+                null;
+
+        }
+
+
+        /*
+         * Reset state.
+         */
+
+        this.paused =
+            false;
+
+
+        this.gameOver =
+            false;
+
+
+        this.levelFinished =
+            false;
+
+
+        /*
+         * Stop old animation loop logically.
+         */
+
         this.running =
             false;
 
 
         /*
-         * Hide old overlays before loading.
+         * Hide old overlays.
          */
+
         this.ui.hideWarning();
 
         this.ui.hideOverlay();
@@ -1508,23 +2444,22 @@ class Game {
 
 
         /*
-         * Make the game active again.
+         * Start the new level.
          */
+
         this.running =
             true;
 
 
-        /*
-         * Load fresh level state.
-         */
         this.loadLevel(
             index
         );
 
 
         /*
-         * Reset clock.
+         * Reset frame timing.
          */
+
         this.lastTime =
             performance.now();
 
@@ -1532,6 +2467,7 @@ class Game {
         /*
          * Start a fresh animation loop.
          */
+
         requestAnimationFrame(
             (time) => {
 
@@ -1547,15 +2483,32 @@ class Game {
 
     /*
      * =============================================================
-     * EXIT
+     * EXIT TO MENU
      * =============================================================
      */
 
     exitToMenu() {
 
         /*
+         * Remove special warning overlay.
+         */
+
+        if (
+            this.firstEncounterOverlay
+        ) {
+
+            this.firstEncounterOverlay.remove();
+
+            this.firstEncounterOverlay =
+                null;
+
+        }
+
+
+        /*
          * Stop gameplay.
          */
+
         this.paused =
             false;
 
@@ -1564,9 +2517,26 @@ class Game {
             false;
 
 
+        this.gameOver =
+            false;
+
+
+        this.warningActive =
+            false;
+
+
+        this.warningRemaining =
+            0;
+
+
+        this.pendingHazard =
+            null;
+
+
         /*
-         * Stop all game audio.
+         * Stop audio.
          */
+
         if (
 
             window.gameAudio &&
@@ -1581,23 +2551,23 @@ class Game {
 
 
         /*
-         * Hide pause menu.
+         * Hide pause/warning UI.
          */
+
         this.ui.hidePause();
+
+        this.ui.hideWarning();
 
 
         /*
          * Show exit screen.
          */
+
         this.ui.showExit();
 
 
         /*
-         * =========================================================
-         * PLAY AGAIN FROM EXIT SCREEN
-         * =========================================================
-         *
-         * This explicitly restarts the animation loop.
+         * PLAY AGAIN starts a completely new game.
          */
 
         this.ui.setRestartAction(

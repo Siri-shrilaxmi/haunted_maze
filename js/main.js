@@ -18,7 +18,7 @@ const game =
 window.keys = {};
 
 
-/*
+/* 
  * ================================================================
  * KEY DOWN
  * ================================================================
@@ -27,12 +27,6 @@ window.keys = {};
 window.addEventListener(
     "keydown",
     (event) => {
-
-        /*
-         * ESC = PAUSE
-         *
-         * ESC does NOT resume.
-         */
 
         if (
             event.key === "Escape"
@@ -52,19 +46,14 @@ window.addEventListener(
 
 
             if (
-
                 !game.paused &&
-
                 game.running &&
-
                 !game.gameOver
-
             ) {
 
                 game.pause();
 
             }
-
 
             return;
 
@@ -72,11 +61,8 @@ window.addEventListener(
 
 
         if (
-
             window.gameAudio &&
-
             window.gameAudio.init
-
         ) {
 
             window.gameAudio.init();
@@ -89,13 +75,7 @@ window.addEventListener(
         ] = true;
 
 
-        /*
-         * Stop browser scrolling
-         * with movement keys.
-         */
-
         if (
-
             [
                 "ArrowUp",
                 "ArrowDown",
@@ -105,7 +85,6 @@ window.addEventListener(
             ].includes(
                 event.key
             )
-
         ) {
 
             event.preventDefault();

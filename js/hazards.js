@@ -80,6 +80,32 @@ class ChaseBlock {
 
 
     /*
+     * ============================================================
+     * LETHAL STATE
+     * ============================================================
+     *
+     * The ghost is dangerous in BOTH active states:
+     *
+     *      chasing  -> can kill the player
+     *      blocking -> can also kill the player
+     *
+     * The blocking ghost is therefore NOT just a normal wall.
+     *
+     * It remains a permanent lethal ghost on the trigger tile.
+     */
+    isLethal() {
+
+        return (
+            this.active &&
+            (
+                this.state === "chasing" ||
+                this.state === "blocking"
+            )
+        );
+    }
+
+
+    /*
      * Spawn only in the direction from which
      * the player entered the trigger.
      *
@@ -106,15 +132,25 @@ class ChaseBlock {
         /*
          * SIX MAZE STEPS, not six straight tiles.
          *
-         * The first step is forced to be the direction the player used
-         * to enter the trigger. After that the path is allowed to turn.
+         * The first step is forced to be the direction the player
+         * used to enter the trigger. After that the path may turn.
          */
-        const distance = Math.max(1, Math.floor(this.config.spawnDistance || 6));
-        const spawnPath = this.maze.findSixStepsAhead(
-            this.trigger,
-            { x: dx, y: dy },
-            distance
+        const distance = Math.max(
+            1,
+            Math.floor(
+                this.config.spawnDistance || 6
+            )
         );
+
+        const spawnPath =
+            this.maze.findSixStepsAhead(
+                this.trigger,
+                {
+                    x: dx,
+                    y: dy
+                },
+                distance
+            );
 
         if (!spawnPath) {
             return null;
@@ -127,18 +163,22 @@ class ChaseBlock {
         };
     }
 
+
     prepareSpawn(direction) {
 
         if (this.state !== "waiting") {
             return false;
         }
 
-        const spawn = this.findFrontSpawn(direction);
+        const spawn =
+            this.findFrontSpawn(direction);
 
         if (!spawn) {
+
             console.warn(
                 `Chase event "${this.config.id}" cannot find six maze steps in front of the player.`
             );
+
             return false;
         }
 
@@ -152,12 +192,16 @@ class ChaseBlock {
             y: spawn.y
         };
 
-        this.spawnPath = spawn.path || [];
+        this.spawnPath =
+            spawn.path || [];
+
         this.state = "warning";
+
         this.active = false;
 
         return true;
     }
+
 
     startWarning() {
 
@@ -165,15 +209,26 @@ class ChaseBlock {
             return;
         }
 
+        /*
+         * Ghost is invisible and non-lethal
+         * during the warning.
+         */
         this.active = false;
     }
 
+
     /*
-     * Called after the warning disappears.
+     * ============================================================
+     * BEGIN CHASE
+     * ============================================================
      */
+
     beginChase() {
 
-        if (this.state !== "warning" || !this.spawn) {
+        if (
+            this.state !== "warning" ||
+            !this.spawn
+        ) {
             return false;
         }
 
@@ -181,21 +236,37 @@ class ChaseBlock {
         this.y = this.spawn.y;
 
         this.state = "chasing";
+
+        /*
+         * Chasing ghost is active and lethal.
+         */
         this.active = true;
 
         this.path = [];
         this.pathIndex = 0;
+
         this.chaseTime = 0;
         this.chaseDistance = 0;
+
         this.currentTarget = null;
+
         this.pathRefreshTimer = 0;
 
         return true;
     }
 
+
     /*
-     * After the chase, the ghost remains permanently on the trigger tile
-     * and the physical trigger tile becomes blocked.
+     * ============================================================
+     * FINISH CHASE
+     * ============================================================
+     *
+     * IMPORTANT:
+     *
+     * The ghost does NOT disappear.
+     *
+     * It moves permanently to the trigger tile and becomes
+     * a stationary lethal ghost.
      */
     finishChase() {
 
@@ -203,29 +274,75 @@ class ChaseBlock {
         this.y = this.trigger.y;
 
         this.state = "blocking";
+
+        /*
+         * VERY IMPORTANT:
+         *
+         * Keep active = true.
+         *
+         * This means the stationary ghost continues to be
+         * detected by isColliding().
+         */
         this.active = true;
 
         this.path = [];
         this.pathIndex = 0;
+
         this.currentTarget = null;
 
-        if (this.maze && this.maze.addBlock) {
-            this.maze.addBlock(this.trigger.x, this.trigger.y);
+        /*
+         * The physical maze tile is also blocked so the player
+         * cannot walk through the ghost.
+         */
+        if (
+            this.maze &&
+            this.maze.addBlock
+        ) {
+            this.maze.addBlock(
+                this.trigger.x,
+                this.trigger.y
+            );
         }
     }
 
+
     getGridPosition() {
+
         return {
             x: Math.round(this.x),
             y: Math.round(this.y)
         };
     }
 
+
+    /*
+     * ============================================================
+     * UPDATE
+     * ============================================================
+     */
+
     update(
         deltaTime,
         player
     ) {
 
+        /*
+         * A blocking ghost is stationary.
+         *
+         * DO NOT move it again.
+         *
+         * Its collision remains active through isColliding().
+         */
+        if (
+            this.state === "blocking"
+        ) {
+            return;
+        }
+
+
+        /*
+         * Only chasing ghosts move.
+         */
         if (
             this.state !== "chasing"
         ) {
@@ -238,8 +355,7 @@ class ChaseBlock {
         }
 
 
-        this.chaseTime +=
-            deltaTime;
+        this.chaseTime += deltaTime;
 
 
         /*
@@ -348,7 +464,6 @@ class ChaseBlock {
 
         this.path =
             newPath;
-
 
         this.pathIndex = 1;
     }
@@ -463,10 +578,22 @@ class ChaseBlock {
     }
 
 
+    /*
+     * ============================================================
+     * COLLISION
+     * ============================================================
+     *
+     * BOTH types of ghost are lethal:
+     *
+     * 1. Moving/chasing ghost
+     * 2. Stationary/blocking ghost
+     *
+     * Warning state is NOT lethal because active=false.
+     */
     isColliding(player) {
 
         if (
-            !this.active ||
+            !this.isLethal() ||
             !player
         ) {
             return false;
