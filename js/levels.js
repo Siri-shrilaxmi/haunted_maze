@@ -154,7 +154,7 @@ const LEVELS = [
 
         triggerMode: "one-per-non-safe-route",
 
-        spawnDistance: 4,
+        spawnDistance: 5,
 
         safeRouteAttempts: 50,
 

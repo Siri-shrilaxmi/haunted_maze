@@ -98,27 +98,46 @@
         <div class="controls">
 
 
-            <div class="key-group">
+            <div
+                class="key-group movement-keys"
+                aria-label="Touch movement controls"
+            >
 
-                <span class="key">W</span>
-                <span class="key">A</span>
-                <span class="key">S</span>
-                <span class="key">D</span>
+                <button
+                    type="button"
+                    class="key movement-key"
+                    data-direction="up"
+                    aria-label="Move up"
+                >
+                    ↑
+                </button>
 
-            </div>
+                <button
+                    type="button"
+                    class="key movement-key"
+                    data-direction="left"
+                    aria-label="Move left"
+                >
+                    ←
+                </button>
 
+                <button
+                    type="button"
+                    class="key movement-key"
+                    data-direction="down"
+                    aria-label="Move down"
+                >
+                    ↓
+                </button>
 
-            <span class="control-slash">
-                /
-            </span>
-
-
-            <div class="key-group">
-
-                <span class="key">↑</span>
-                <span class="key">←</span>
-                <span class="key">↓</span>
-                <span class="key">→</span>
+                <button
+                    type="button"
+                    class="key movement-key"
+                    data-direction="right"
+                    aria-label="Move right"
+                >
+                    →
+                </button>
 
             </div>
 
@@ -127,21 +146,6 @@
                 MOVE
             </span>
 
-
-            <div class="control-divider"></div>
-
-
-            <div class="key-group">
-
-                <span class="key">
-                    ESC
-                </span>
-
-                <span class="control-label">
-                    PAUSE
-                </span>
-
-            </div>
 
 
         </div>
