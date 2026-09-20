@@ -33,13 +33,13 @@ const LEVELS = [
 
         triggerMode: "one-per-non-safe-route",
 
-        spawnDistance: 6,
+        spawnDistance: 7,
 
         safeRouteAttempts: 30,
 
         warningTime: 1500,
 
-        speed: 3.4,
+        speed: 3.0,
 
         maxDuration: 3,
         maxDistance: 10
@@ -154,7 +154,7 @@ const LEVELS = [
 
         triggerMode: "one-per-non-safe-route",
 
-        spawnDistance: 5,
+        spawnDistance: 4,
 
         safeRouteAttempts: 50,
 

@@ -1128,44 +1128,23 @@ class Game {
 
             /*
              * =====================================================
-             * FIRST WRONG-ROUTE ENCOUNTER
+             * HAZARD TRIGGER
              * =====================================================
              *
-             * ONLY the first encounter of the entire game:
+             * There is no special first-encounter interruption.
+             * Every triggered ghost uses the same behavior:
              *
-             *     pause
-             *     center warning
-             *     CONTINUE
-             *     ghost starts
+             *     red flash + warning sound
+             *     ghost appears immediately
+             *     chase starts immediately
+             *
+             * This keeps the first encounter clear and avoids making
+             * the player think something went wrong with the game.
              */
 
-            if (
-                !this.firstEncounterWarningShown
-            ) {
-
-                this.startFirstEncounterWarning(
-                    hazard
-                );
-
-            }
-
-            /*
-             * =====================================================
-             * ALL LATER ENCOUNTERS
-             * =====================================================
-             *
-             * No waiting period anymore.
-             *
-             * Red flash + warning sound + ghost immediately.
-             */
-
-            else {
-
-                this.startHazardWarning(
-                    hazard
-                );
-
-            }
+            this.startHazardWarning(
+                hazard
+            );
 
 
             break;
