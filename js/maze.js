@@ -2048,6 +2048,41 @@ class Maze {
 
             /*
              * =====================================================
+             * PHYSICAL TRIGGER DEDUPLICATION
+             * =====================================================
+             *
+             * Different discovered S->E routes can share the same
+             * physical corridor. A trigger belongs to the physical
+             * maze location, not to every abstract route that happens
+             * to traverse it. Keep exactly one gate for each trigger
+             * tile.
+             */
+            const uniqueTriggerKeys = new Set();
+            const uniqueMatching = [];
+
+            for (const candidate of matching) {
+
+                if (!candidate) continue;
+
+                const key = this.pointKey(candidate);
+
+                if (uniqueTriggerKeys.has(key)) continue;
+
+                uniqueTriggerKeys.add(key);
+                uniqueMatching.push(candidate);
+
+            }
+
+            /* If route candidates collapsed onto one physical trigger,
+               accept the physical trigger set rather than creating
+               duplicate ghosts for the same tile. */
+            if (!uniqueMatching.length) {
+                continue;
+            }
+
+
+            /*
+             * =====================================================
              * SAFE ROUTE ACCEPTED
              * ===================================================== */
 
@@ -2082,7 +2117,7 @@ class Maze {
              * ===================================================== */
 
             const gates =
-                matching.map(
+                uniqueMatching.map(
                     (
                         candidate,
                         nonSafeIndex

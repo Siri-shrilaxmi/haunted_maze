@@ -21,7 +21,7 @@ class Renderer {
     }
 
 
-    draw(player, hazards = []) {
+    draw(player, hazards = [], collectibles = []) {
 
         const ctx = this.ctx;
         const tileSize = this.tileSize;
@@ -299,6 +299,15 @@ class Renderer {
 
 
         // ============================================================
+        // COLLECTIBLES
+        // ============================================================
+
+        for (const item of collectibles || []) {
+            if (!item || item.collected) continue;
+            this.drawCollectible(ctx, item.x, item.y, tileSize, item.value);
+        }
+
+        // ============================================================
         // HAZARDS
         // ============================================================
 
@@ -320,7 +329,8 @@ class Renderer {
                 isSnow,
                 isDigital,
                 isPalace,
-                isHaunted
+                isHaunted,
+                hazard
             );
         }
 
@@ -1706,6 +1716,36 @@ class Renderer {
     }
 
 
+    drawCollectible(ctx, x, y, tileSize, value = 10) {
+        const cx = x * tileSize + tileSize / 2;
+        const cy = y * tileSize + tileSize / 2;
+        const pulse = 1 + Math.sin(performance.now() / 180 + x * 1.7 + y) * 0.10;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(pulse, pulse);
+        ctx.shadowBlur = tileSize * 0.35;
+        ctx.shadowColor = "rgba(255,220,80,0.8)";
+        ctx.fillStyle = "#ffd95a";
+        ctx.beginPath();
+        ctx.moveTo(0, -tileSize * 0.25);
+        ctx.lineTo(tileSize * 0.20, 0);
+        ctx.lineTo(0, tileSize * 0.25);
+        ctx.lineTo(-tileSize * 0.20, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.beginPath();
+        ctx.arc(-tileSize * 0.07, -tileSize * 0.08, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = `${Math.max(8, tileSize * 0.22)}px Arial`;
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(255,245,190,0.95)";
+        ctx.fillText(`+${value}`, 0, tileSize * 0.43);
+        ctx.restore();
+    }
+
+
     // =================================================================
     // GHOST
     // =================================================================
@@ -1719,7 +1759,8 @@ class Renderer {
         isSnow,
         isDigital,
         isPalace,
-        isHaunted
+        isHaunted,
+        hazard = null
     ) {
 
         const centerX =
@@ -1728,6 +1769,9 @@ class Renderer {
         const centerY =
             y * tileSize + tileSize / 2;
 
+        const chaseTime = hazard ? hazard.chaseTime || 0 : 0;
+        const pulse = 1 + Math.sin(performance.now() / 90 + x * 2) * 0.06;
+        const rage = Math.min(1, chaseTime / 3);
 
         const gradient =
             ctx.createRadialGradient(
@@ -1807,11 +1851,14 @@ class Renderer {
 
         ctx.textBaseline = "middle";
 
-        ctx.fillText(
-            "👻",
-            centerX,
-            centerY + 1
-        );
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(pulse, pulse);
+        ctx.shadowBlur = tileSize * (0.20 + rage * 0.25);
+        ctx.shadowColor = rage > 0.65 ? "rgba(255,70,70,0.85)" : "rgba(220,230,255,0.55)";
+        ctx.font = `${tileSize * 0.72}px "Segoe UI Emoji", "Apple Color Emoji", Arial`;
+        ctx.fillText("👻", 0, 1);
+        ctx.restore();
     }
 
 

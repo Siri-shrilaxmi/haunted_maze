@@ -28,6 +28,11 @@ class Game {
         this.hazards =
             [];
 
+        this.collectibles = [];
+        this.score = 0;
+        this.levelScore = 0;
+        this.combo = 0;
+
 
         this.hazardTemplates =
             [];
@@ -35,6 +40,14 @@ class Game {
 
         this.trapTriggeredCells =
             new Set();
+
+        /*
+         * Ghosts belonging to the currently active encounter.
+         * A trigger can create 1-3 ghosts, but encounters are kept
+         * from overlapping so the screen does not become chaotic.
+         * A later trigger may fire after the current chase ends.
+         */
+        this.activeGhostHazards = [];
 
 
         this.renderer =
@@ -165,6 +178,10 @@ class Game {
         this.levelIndex =
             0;
 
+        this.score = 0;
+        this.levelScore = 0;
+        this.combo = 0;
+
         this.firstEncounterWarningShown =
             false;
 
@@ -276,6 +293,7 @@ class Game {
             [];
 
         this.trapTriggeredCells.clear();
+        this.activeGhostHazards = [];
 
 
         /*
@@ -333,6 +351,8 @@ class Game {
 
         this.randomEscapePath =
             routePlan.path || [];
+
+        this.createCollectibles();
 
 
         /*
@@ -492,6 +512,10 @@ class Game {
 
         this.remainingTime =
             level.timeLimit;
+
+        this.levelScore = 0;
+        this.combo = 0;
+        this.updateScoreUI();
 
 
         this.paused =
@@ -811,6 +835,8 @@ class Game {
          * =========================================================
          */
 
+        this.collectPlayerPoints();
+
         this.checkChaseTriggers(
 
             previousPlayerPosition,
@@ -993,6 +1019,83 @@ class Game {
 
 
     /*
+     * Build distinct spawn locations for a single trigger.
+     * The preferred locations are behind the player (ambush), with
+     * progressively different distances. Side/forward corridors are
+     * used as fallbacks when the maze geometry is tight.
+     */
+    getGhostSpawnCandidates(hazard, direction) {
+
+        const dx = Math.sign(direction?.x || 0);
+        const dy = Math.sign(direction?.y || 0);
+
+        if ((dx === 0 && dy === 0) || (dx !== 0 && dy !== 0)) {
+            return [];
+        }
+
+        const behind = { x: -dx, y: -dy };
+        const forward = { x: dx, y: dy };
+        const left = { x: dy, y: -dx };
+        const right = { x: -dy, y: dx };
+
+        const base = Math.max(3, Math.floor(hazard.config.spawnDistance || 5));
+        const directions = [behind, behind, behind, forward, left, right];
+        const distances = [base, base + 2, base + 4, base, base + 2, base + 2];
+        const candidates = [];
+        const seen = new Set();
+
+        for (let i = 0; i < directions.length; i++) {
+            const result = this.maze.findSixStepsAhead(
+                hazard.trigger,
+                directions[i],
+                distances[i]
+            );
+
+            if (!result) continue;
+
+            const key = `${result.x},${result.y}`;
+            if (seen.has(key)) continue;
+
+            seen.add(key);
+            candidates.push({
+                x: result.x,
+                y: result.y,
+                path: result.path || []
+            });
+        }
+
+        /* Add a few more distance variants when the maze permits it. */
+        for (const distance of [base + 1, base + 3, base + 5]) {
+            const result = this.maze.findSixStepsAhead(
+                hazard.trigger,
+                behind,
+                distance
+            );
+
+            if (!result) continue;
+
+            const key = `${result.x},${result.y}`;
+            if (seen.has(key)) continue;
+
+            seen.add(key);
+            candidates.push({
+                x: result.x,
+                y: result.y,
+                path: result.path || []
+            });
+        }
+
+        /* Randomize which distinct positions are used. */
+        for (let i = candidates.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+        }
+
+        return candidates.slice(0, 3);
+    }
+
+
+    /*
      * =============================================================
      * CHECK CHASE TRIGGERS
      * =============================================================
@@ -1013,6 +1116,24 @@ class Game {
 
         if (
             this.warningActive
+        ) {
+
+            return;
+
+        }
+
+        /*
+         * Do not overlap separate trigger encounters. The important
+         * difference from the old single-ghost lock is that ONE
+         * trigger may now create several ghosts. Once all ghosts in
+         * that encounter finish chasing, another trigger can fire.
+         */
+        if (
+            this.hazards.some(
+                hazard =>
+                    hazard &&
+                    (hazard.isWarning() || hazard.isChasing())
+            )
         ) {
 
             return;
@@ -1085,65 +1206,82 @@ class Game {
 
 
             /*
-             * Prepare the ghost spawn using the player's ACTUAL
-             * approach direction.
+             * =====================================================
+             * MULTI-GHOST ENCOUNTER
+             * =====================================================
+             *
+             * One trigger now creates a random 1-3 ghosts. Their
+             * spawn tiles are deliberately selected from different
+             * maze positions, so several ghosts never materialize on
+             * top of each other.
              */
 
-            const prepared =
-                hazard.prepareSpawn(
+            const ghostCount =
+                1 + Math.floor(Math.random() * 3);
+
+            const spawnCandidates =
+                this.getGhostSpawnCandidates(
+                    hazard,
                     movedDirection
                 );
 
-
-            if (
-                !prepared
-            ) {
+            if (spawnCandidates.length === 0) {
 
                 console.warn(
-
-                    `[Maze Escape] Trigger ${triggerKey} ` +
-                    `could not prepare a six-tile spawn.`
-
+                    `[Maze Escape] Trigger ${triggerKey} could not prepare a ghost spawn.`
                 );
 
-
                 continue;
-
             }
 
+            const selectedCount =
+                Math.min(ghostCount, spawnCandidates.length);
 
-            /*
-             * Mark this trigger permanently activated.
-             */
+            const encounterGhosts = [];
 
-            this.trapTriggeredCells.add(
-                triggerKey
-            );
+            for (let i = 0; i < selectedCount; i++) {
 
+                const targetHazard =
+                    i === 0
+                        ? hazard
+                        : new ChaseBlock(
+                            this.maze,
+                            {
+                                ...hazard.config,
+                                id: `${hazard.config.id}-ghost-${i + 1}`
+                            }
+                        );
 
-            this.triggeredEvents.add(
-                hazard.config.id
-            );
+                const prepared =
+                    targetHazard.prepareSpawn(
+                        movedDirection,
+                        spawnCandidates[i]
+                    );
 
+                if (prepared) {
+                    targetHazard.spawnIndex = i;
+                    encounterGhosts.push(targetHazard);
+                }
+            }
 
-            /*
-             * =====================================================
-             * HAZARD TRIGGER
-             * =====================================================
-             *
-             * There is no special first-encounter interruption.
-             * Every triggered ghost uses the same behavior:
-             *
-             *     red flash + warning sound
-             *     ghost appears immediately
-             *     chase starts immediately
-             *
-             * This keeps the first encounter clear and avoids making
-             * the player think something went wrong with the game.
-             */
+            if (!encounterGhosts.length) {
+                continue;
+            }
+
+            /* Additional ghosts are now real hazards for collision,
+               rendering and chase updates, but they share the same
+               consumed physical trigger. */
+            for (const extraGhost of encounterGhosts.slice(1)) {
+                this.hazards.push(extraGhost);
+            }
+
+            /* Mark this physical trigger permanently activated. */
+            this.trapTriggeredCells.add(triggerKey);
+            this.triggeredEvents.add(hazard.config.id);
+            this.activeGhostHazards = encounterGhosts;
 
             this.startHazardWarning(
-                hazard
+                encounterGhosts
             );
 
 
@@ -1699,7 +1837,9 @@ class Game {
                 null;
 
 
+            for (const hazard of encounterGhosts) {
             hazard.beginChase();
+        }
 
 
             /*
@@ -1759,7 +1899,10 @@ class Game {
      * immediately.
      */
 
-    startHazardWarning(hazard) {
+    startHazardWarning(hazards) {
+
+        const encounterGhosts =
+            Array.isArray(hazards) ? hazards : [hazards];
 
         /*
          * There is no pending delayed hazard anymore.
@@ -1784,7 +1927,9 @@ class Game {
          */
 
         this.ui.setWarningText(
-            "⚠  SOMETHING IS COMING"
+            encounterGhosts.length > 1
+                ? `⚠  ${encounterGhosts.length} GHOSTS ARE COMING`
+                : "⚠  SOMETHING IS COMING"
         );
 
 
@@ -1815,7 +1960,12 @@ class Game {
          * =========================================================
          */
 
-        hazard.beginChase();
+        for (const ghost of encounterGhosts) {
+
+            if (ghost && ghost.isWarning()) {
+                ghost.beginChase();
+            }
+        }
 
 
         /*
@@ -1878,6 +2028,63 @@ class Game {
 
     /*
      * =============================================================
+     * POINTS / COLLECTIBLES
+     * =============================================================
+     */
+
+    createCollectibles() {
+        const safe = new Set((this.randomEscapePath || []).map(p => `${p.x},${p.y}`));
+        const blocked = new Set();
+        for (const h of this.hazards || []) blocked.add(`${h.trigger.x},${h.trigger.y}`);
+
+        const candidates = [];
+        for (let y = 0; y < this.maze.rows; y++) {
+            for (let x = 0; x < this.maze.cols; x++) {
+                if (!this.maze.isWalkable(x, y)) continue;
+                if ((x === this.maze.start.x && y === this.maze.start.y) || (x === this.maze.exit.x && y === this.maze.exit.y)) continue;
+                if (blocked.has(`${x},${y}`)) continue;
+                const key = `${x},${y}`;
+                const degree = this.maze.getDegree({x, y});
+                let value = safe.has(key) ? 10 : 15;
+                if (degree >= 3) value += 5;
+                candidates.push({x, y, value, collected: false});
+            }
+        }
+
+        // Spread collectibles through the maze instead of clustering them.
+        this.maze.shuffle(candidates);
+        const chosen = [];
+        const targetCount = Math.min(14 + this.levelIndex * 3, 28);
+        for (const c of candidates) {
+            if (chosen.some(o => Math.abs(o.x-c.x)+Math.abs(o.y-c.y) < 4)) continue;
+            chosen.push(c);
+            if (chosen.length >= targetCount) break;
+        }
+        this.collectibles = chosen;
+    }
+
+    collectPlayerPoints() {
+        if (!this.collectibles) return;
+        for (const item of this.collectibles) {
+            if (item.collected) continue;
+            if (item.x !== this.player.x || item.y !== this.player.y) continue;
+            item.collected = true;
+            this.combo += 1;
+            const bonus = this.combo % 5 === 0 ? 25 : 0;
+            const gained = item.value + bonus;
+            this.score += gained;
+            this.levelScore += gained;
+            this.updateScoreUI();
+            if (window.gameAudio && window.gameAudio.collect) window.gameAudio.collect();
+        }
+    }
+
+    updateScoreUI() {
+        if (this.ui && this.ui.updateScore) this.ui.updateScore(this.score, this.levelScore);
+    }
+
+    /*
+     * =============================================================
      * RENDER
      * =============================================================
      */
@@ -1898,7 +2105,9 @@ class Game {
 
             this.player,
 
-            this.hazards
+            this.hazards,
+
+            this.collectibles
 
         );
 

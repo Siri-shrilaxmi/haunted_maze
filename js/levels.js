@@ -39,10 +39,10 @@ const LEVELS = [
 
         warningTime: 1500,
 
-        speed: 3.0,
+        speed: 3.6,
 
-        maxDuration: 3,
-        maxDistance: 10
+        maxDuration: 5,
+        maxDistance: 18
     },
 
 
@@ -99,10 +99,10 @@ const LEVELS = [
 
         warningTime: 1500,
 
-        speed: 3.5,
+        speed: 4.0,
 
-        maxDuration: 3,
-        maxDistance: 10
+        maxDuration: 5,
+        maxDistance: 18
     },
 
 
@@ -160,11 +160,11 @@ const LEVELS = [
 
         warningTime: 1500,
 
-        speed: 3.7,
+        speed: 4.2,
 
-        maxDuration: 3,
+        maxDuration: 5,
 
-        maxDistance: 8
+        maxDistance: 20
     },
 
 

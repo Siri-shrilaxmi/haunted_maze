@@ -5,7 +5,7 @@ class Player {
         this.x = maze.start.x;
         this.y = maze.start.y;
 
-        this.moveDelay = 120;
+        this.moveDelay = 200;
         this.lastMoveTime = 0;
     }
 

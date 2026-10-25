@@ -15,6 +15,9 @@ class UI {
         this.timer =
             document.getElementById("timer");
 
+        this.score =
+            document.getElementById("score");
+
 
         // =========================================================
         // WARNING
@@ -260,6 +263,11 @@ class UI {
 
     }
 
+
+
+    updateScore(total, levelScore = total) {
+        if (this.score) this.score.textContent = String(total).padStart(5, "0");
+    }
 
     // =============================================================
     // WARNING

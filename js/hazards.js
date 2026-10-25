@@ -16,6 +16,8 @@ class ChaseBlock {
         this.spawn = null;
         this.spawnPath = [];
         this.direction = null;
+        this.spawnIndex = 0;
+        this.encounterId = null;
 
         this.state = "waiting";
 
@@ -30,7 +32,12 @@ class ChaseBlock {
         this.currentTarget = null;
 
         this.pathRefreshTimer = 0;
-        this.pathRefreshRate = 0.12;
+        this.pathRefreshRate = 0.08;
+
+        this.appearanceTime = 0;
+        this.lastPlayerDirection = { x: 0, y: 0 };
+        this.speedRamp = 0;
+        this.stuckTime = 0;
     }
 
 
@@ -42,6 +49,8 @@ class ChaseBlock {
         this.spawn = null;
         this.spawnPath = [];
         this.direction = null;
+        this.spawnIndex = 0;
+        this.encounterId = null;
 
         this.state = "waiting";
 
@@ -56,6 +65,11 @@ class ChaseBlock {
         this.currentTarget = null;
 
         this.pathRefreshTimer = 0;
+
+        this.appearanceTime = 0;
+        this.lastPlayerDirection = { x: 0, y: 0 };
+        this.speedRamp = 0;
+        this.stuckTime = 0;
     }
 
 
@@ -113,65 +127,57 @@ class ChaseBlock {
      * No diagonal spawning.
      * No spawning behind the player.
      */
-    findFrontSpawn(direction) {
+    findFrontSpawn(direction, distanceOverride = null) {
 
-        if (!direction) {
-            return null;
-        }
+        if (!direction) return null;
 
         const dx = Math.sign(direction.x || 0);
         const dy = Math.sign(direction.y || 0);
 
-        if (
-            (dx !== 0 && dy !== 0) ||
-            (dx === 0 && dy === 0)
-        ) {
+        if ((dx !== 0 && dy !== 0) || (dx === 0 && dy === 0)) {
             return null;
         }
 
         /*
-         * SIX MAZE STEPS, not six straight tiles.
-         *
-         * The first step is forced to be the direction the player
-         * used to enter the trigger. After that the path may turn.
+         * Ambush behavior: after the player crosses a trigger, the
+         * ghost prefers to materialize BEHIND the player. This makes
+         * the event a chase rather than a predictable wall appearing
+         * directly in front of the player.
          */
-        const distance = Math.max(
-            1,
-            Math.floor(
-                this.config.spawnDistance || 6
-            )
+        const ambushDirection = { x: -dx, y: -dy };
+        const distance = Math.max(3, Math.floor(
+            distanceOverride ?? this.config.spawnDistance ?? 5
+        ));
+
+        let spawnPath = this.maze.findSixStepsAhead(
+            this.trigger,
+            ambushDirection,
+            distance
         );
 
-        const spawnPath =
-            this.maze.findSixStepsAhead(
+        /* If the corridor behind is too short, use the forward side
+           rather than cancelling the encounter. */
+        if (!spawnPath) {
+            spawnPath = this.maze.findSixStepsAhead(
                 this.trigger,
-                {
-                    x: dx,
-                    y: dy
-                },
+                { x: dx, y: dy },
                 distance
             );
-
-        if (!spawnPath) {
-            return null;
         }
 
-        return {
-            x: spawnPath.x,
-            y: spawnPath.y,
-            path: spawnPath.path
-        };
+        if (!spawnPath) return null;
+
+        return { x: spawnPath.x, y: spawnPath.y, path: spawnPath.path };
     }
 
-
-    prepareSpawn(direction) {
+    prepareSpawn(direction, spawnOverride = null) {
 
         if (this.state !== "waiting") {
             return false;
         }
 
         const spawn =
-            this.findFrontSpawn(direction);
+            spawnOverride || this.findFrontSpawn(direction);
 
         if (!spawn) {
 
@@ -251,6 +257,9 @@ class ChaseBlock {
         this.currentTarget = null;
 
         this.pathRefreshTimer = 0;
+        this.appearanceTime = 0;
+        this.speedRamp = 0;
+        this.stuckTime = 0;
 
         return true;
     }
@@ -326,91 +335,36 @@ class ChaseBlock {
         player
     ) {
 
-        /*
-         * A blocking ghost is stationary.
-         *
-         * DO NOT move it again.
-         *
-         * Its collision remains active through isColliding().
-         */
-        if (
-            this.state === "blocking"
-        ) {
+        if (this.state === "blocking" || this.state !== "chasing" || !player) {
             return;
         }
-
-
-        /*
-         * Only chasing ghosts move.
-         */
-        if (
-            this.state !== "chasing"
-        ) {
-            return;
-        }
-
-
-        if (!player) {
-            return;
-        }
-
 
         this.chaseTime += deltaTime;
+        this.appearanceTime += deltaTime;
 
-
-        /*
-         * Maximum chase time.
-         */
-        if (
-            this.config.maxDuration &&
-            this.chaseTime >=
-                this.config.maxDuration
-        ) {
-
+        if (this.config.maxDuration && this.chaseTime >= this.config.maxDuration) {
             this.finishChase();
-
             return;
         }
 
-
-        this.pathRefreshTimer -=
-            deltaTime;
-
-
-        if (
-            this.pathRefreshTimer <= 0 ||
-            this.path.length === 0 ||
-            this.pathIndex >=
-                this.path.length
-        ) {
-
-            this.calculatePath(
-                player
-            );
-
-            this.pathRefreshTimer =
-                this.pathRefreshRate;
+        const dx = Math.sign(player.x - this.x);
+        const dy = Math.sign(player.y - this.y);
+        if (Math.abs(dx) + Math.abs(dy) === 1) {
+            this.lastPlayerDirection = { x: dx, y: dy };
         }
 
+        this.pathRefreshTimer -= deltaTime;
+        if (this.pathRefreshTimer <= 0 || this.path.length === 0 || this.pathIndex >= this.path.length) {
+            this.calculatePath(player);
+            this.pathRefreshTimer = this.pathRefreshRate;
+        }
 
-        this.moveAlongPath(
-            deltaTime
-        );
+        this.moveAlongPath(deltaTime, player);
 
-
-        /*
-         * Maximum chase distance.
-         */
-        if (
-            this.config.maxDistance &&
-            this.chaseDistance >=
-                this.config.maxDistance
-        ) {
-
+        if (this.config.maxDistance && this.chaseDistance >= this.config.maxDistance) {
             this.finishChase();
         }
     }
-
 
     calculatePath(player) {
 
@@ -426,16 +380,15 @@ class ChaseBlock {
         };
 
 
-        const goal = {
-
-            x: Math.round(
-                player.x
-            ),
-
-            y: Math.round(
-                player.y
-            )
+        const lead = this.chaseTime < 0.8 ? 1 : 2;
+        const predicted = {
+            x: Math.round(player.x + this.lastPlayerDirection.x * lead),
+            y: Math.round(player.y + this.lastPlayerDirection.y * lead)
         };
+
+        const goal = this.maze.isWalkable(predicted.x, predicted.y)
+            ? predicted
+            : { x: Math.round(player.x), y: Math.round(player.y) };
 
 
         this.currentTarget =
@@ -470,7 +423,8 @@ class ChaseBlock {
 
 
     moveAlongPath(
-        deltaTime
+        deltaTime,
+        player
     ) {
 
         if (
@@ -528,13 +482,17 @@ class ChaseBlock {
         }
 
 
-        const speed =
-            this.config.speed || 3;
+        // Global movement scale: keep the entire chase noticeably slower
+        // while preserving the same proportional acceleration/proximity behavior.
+        const MOVEMENT_SPEED_SCALE = 0.60;
+        const baseSpeed = this.config.speed || 3.5;
+        const ramp = Math.min(1, this.chaseTime / 3.5);
+        const proximity = player
+            ? Math.max(0, 1 - Math.hypot(player.x - this.x, player.y - this.y) / 8)
+            : 0;
+        const speed = (baseSpeed + ramp * 1.8 + proximity * 1.2) * MOVEMENT_SPEED_SCALE;
 
-
-        const movement =
-            speed *
-            deltaTime;
+        const movement = speed * deltaTime;
 
 
         if (
