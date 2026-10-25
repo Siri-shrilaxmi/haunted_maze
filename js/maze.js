@@ -1856,6 +1856,36 @@ class Maze {
 
         }
 
+        /*
+         * Do not let the visually obvious shortest/straightest route
+         * become the safe route too often.  Players naturally test the
+         * corridor that looks most direct first; making that route safe
+         * repeatedly means they can finish a level without ever seeing
+         * the ghost system.  Prefer routes with more turns and slightly
+         * greater length, but retain randomness so the answer is never
+         * predictable.
+         */
+        const routeDifficulty = (route) => {
+            if (!route || route.length < 2) return -Infinity;
+            let turns = 0;
+            for (let i = 2; i < route.length; i++) {
+                const a = route[i - 1];
+                const b = route[i];
+                const c = route[i - 2];
+                const d1x = a.x - c.x;
+                const d1y = a.y - c.y;
+                const d2x = b.x - a.x;
+                const d2y = b.y - a.y;
+                if (d1x !== d2x || d1y !== d2y) turns++;
+            }
+            return route.length + turns * 3.5;
+        };
+
+        candidateSafeRoutes.sort((a, b) => routeDifficulty(b) - routeDifficulty(a));
+
+        /* Keep the upper difficulty band, then randomize inside it. */
+        const difficultBandSize = Math.max(1, Math.ceil(candidateSafeRoutes.length * 0.45));
+        candidateSafeRoutes = candidateSafeRoutes.slice(0, difficultBandSize);
 
         this.shuffle(
             candidateSafeRoutes

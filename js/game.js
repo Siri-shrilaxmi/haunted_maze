@@ -49,6 +49,11 @@ class Game {
          */
         this.activeGhostHazards = [];
 
+        /* Ghost spawn tiles already used during this level.
+         * This prevents later triggers from reusing the same physical
+         * ambush location. */
+        this.usedGhostSpawnCells = new Set();
+
 
         this.renderer =
             null;
@@ -294,6 +299,7 @@ class Game {
 
         this.trapTriggeredCells.clear();
         this.activeGhostHazards = [];
+        this.usedGhostSpawnCells.clear();
 
 
         /*
@@ -1039,36 +1045,33 @@ class Game {
         const right = { x: -dy, y: dx };
 
         const base = Math.max(3, Math.floor(hazard.config.spawnDistance || 5));
-        const directions = [behind, behind, behind, forward, left, right];
-        const distances = [base, base + 2, base + 4, base, base + 2, base + 2];
         const candidates = [];
         const seen = new Set();
 
-        for (let i = 0; i < directions.length; i++) {
+        /*
+         * Do NOT make "behind" the default anymore.
+         * A good ambush should force the player to make a decision:
+         * the ghost can appear behind, ahead, or on either side.
+         * Several distances are sampled so the encounter does not feel
+         * like the same scripted event every time.
+         */
+        const directionPool = [
+            { dir: behind, lane: "behind" },
+            { dir: forward, lane: "forward" },
+            { dir: left, lane: "left" },
+            { dir: right, lane: "right" },
+            { dir: behind, lane: "behind" },
+            { dir: forward, lane: "forward" },
+            { dir: left, lane: "left" },
+            { dir: right, lane: "right" }
+        ];
+
+        for (const entry of directionPool) {
+            /* Small random distance variation prevents fixed spawn spots. */
+            const distance = base + Math.floor(Math.random() * 4);
             const result = this.maze.findSixStepsAhead(
                 hazard.trigger,
-                directions[i],
-                distances[i]
-            );
-
-            if (!result) continue;
-
-            const key = `${result.x},${result.y}`;
-            if (seen.has(key)) continue;
-
-            seen.add(key);
-            candidates.push({
-                x: result.x,
-                y: result.y,
-                path: result.path || []
-            });
-        }
-
-        /* Add a few more distance variants when the maze permits it. */
-        for (const distance of [base + 1, base + 3, base + 5]) {
-            const result = this.maze.findSixStepsAhead(
-                hazard.trigger,
-                behind,
+                entry.dir,
                 distance
             );
 
@@ -1076,22 +1079,90 @@ class Game {
 
             const key = `${result.x},${result.y}`;
             if (seen.has(key)) continue;
+            if (this.usedGhostSpawnCells && this.usedGhostSpawnCells.has(key)) continue;
+
+            const playerDistance =
+                Math.abs(result.x - this.player.x) +
+                Math.abs(result.y - this.player.y);
+
+            if (playerDistance < 3) continue;
+
+            if (this.maze.exit &&
+                result.x === this.maze.exit.x &&
+                result.y === this.maze.exit.y) {
+                continue;
+            }
+
+            if ((this.hazards || []).some(h =>
+                h && h.active && h.x === result.x && h.y === result.y)) {
+                continue;
+            }
 
             seen.add(key);
             candidates.push({
                 x: result.x,
                 y: result.y,
-                path: result.path || []
+                path: result.path || [],
+                lane: entry.lane,
+                preferred: entry.lane !== "behind"
             });
         }
 
-        /* Randomize which distinct positions are used. */
+        /*
+         * Shuffle equally rather than sorting behind-first.  This is
+         * deliberately random: the player must not learn that running
+         * forward always escapes a ghost encounter.
+         */
         for (let i = candidates.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
         }
 
-        return candidates.slice(0, 3);
+        return candidates;
+    }
+
+
+    /**
+     * Check whether the player still has a real route to the exit when
+     * the proposed ghost spawn tiles are treated as temporarily blocked.
+     * This prevents the engine from creating an unavoidable trap.
+     */
+    hasFairEscapeRoute(blockedSpawns, minimumSteps = 4) {
+
+        if (!this.maze || !this.player || !this.maze.exit) return false;
+
+        const blocked = new Set(
+            blockedSpawns.map(p => `${p.x},${p.y}`)
+        );
+
+        const startKey = `${this.player.x},${this.player.y}`;
+        const exitKey = `${this.maze.exit.x},${this.maze.exit.y}`;
+
+        if (blocked.has(startKey) || blocked.has(exitKey)) return false;
+
+        const queue = [{ x: this.player.x, y: this.player.y, d: 0 }];
+        const visited = new Set([startKey]);
+
+        while (queue.length) {
+            const current = queue.shift();
+            const key = `${current.x},${current.y}`;
+
+            if (key === exitKey) {
+                return current.d >= minimumSteps;
+            }
+
+            for (const next of this.maze.getNeighbors(current)) {
+                const nextKey = `${next.x},${next.y}`;
+
+                if (visited.has(nextKey) || blocked.has(nextKey)) continue;
+                if (!this.maze.isWalkable(next.x, next.y)) continue;
+
+                visited.add(nextKey);
+                queue.push({ x: next.x, y: next.y, d: current.d + 1 });
+            }
+        }
+
+        return false;
     }
 
 
@@ -1234,13 +1305,73 @@ class Game {
                 continue;
             }
 
-            const selectedCount =
-                Math.min(ghostCount, spawnCandidates.length);
-
+            /*
+             * Choose 1-3 positions while preserving at least one
+             * meaningful player-to-exit route. If three ghosts would
+             * seal the maze, gracefully reduce the encounter to two or
+             * one rather than creating an impossible situation.
+             */
             const encounterGhosts = [];
+            const selectedSpawns = [];
 
-            for (let i = 0; i < selectedCount; i++) {
+            /*
+             * Build the encounter in random order, but avoid the old
+             * "all ghosts behind the player" pattern.  If possible,
+             * the encounter contains at least one forward/side ghost.
+             * This makes simply holding the forward key unreliable.
+             */
+            const nonBehind = spawnCandidates.filter(c => c.lane !== "behind");
+            const behindCandidates = spawnCandidates.filter(c => c.lane === "behind");
 
+            const shuffled = (items) => {
+                const result = [...items];
+                for (let i = result.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [result[i], result[j]] = [result[j], result[i]];
+                }
+                return result;
+            };
+
+            /* For a multi-ghost encounter, deliberately seed one ghost
+             * away from behind whenever a fair position exists. */
+            const preferredOrder = ghostCount > 1 && nonBehind.length
+                ? [...shuffled(nonBehind), ...shuffled(behindCandidates)]
+                : shuffled(spawnCandidates);
+
+            for (const candidate of preferredOrder) {
+                if (selectedSpawns.length >= ghostCount) break;
+
+                const proposed = [...selectedSpawns, candidate];
+
+                if (!this.hasFairEscapeRoute(proposed, 4)) continue;
+
+                selectedSpawns.push(candidate);
+            }
+
+            /* If we got only a behind spawn for a multi-ghost encounter,
+             * try explicitly to replace/add a non-behind position. */
+            if (ghostCount > 1 &&
+                selectedSpawns.length > 1 &&
+                selectedSpawns.every(c => c.lane === "behind")) {
+
+                for (const candidate of shuffled(nonBehind)) {
+                    const withoutBehind = selectedSpawns.slice(1);
+                    const proposed = [candidate, ...withoutBehind];
+                    if (this.hasFairEscapeRoute(proposed, 4)) {
+                        selectedSpawns.splice(0, selectedSpawns.length, ...proposed);
+                        break;
+                    }
+                }
+            }
+
+            if (!selectedSpawns.length) {
+                console.warn(
+                    `[Maze Escape] No fair ghost placement for trigger ${triggerKey}; encounter skipped.`
+                );
+                continue;
+            }
+
+            for (let i = 0; i < selectedSpawns.length; i++) {
                 const targetHazard =
                     i === 0
                         ? hazard
@@ -1252,15 +1383,15 @@ class Game {
                             }
                         );
 
-                const prepared =
-                    targetHazard.prepareSpawn(
-                        movedDirection,
-                        spawnCandidates[i]
-                    );
+                const prepared = targetHazard.prepareSpawn(
+                    movedDirection,
+                    selectedSpawns[i]
+                );
 
                 if (prepared) {
                     targetHazard.spawnIndex = i;
                     encounterGhosts.push(targetHazard);
+                    this.usedGhostSpawnCells.add(`${selectedSpawns[i].x},${selectedSpawns[i].y}`);
                 }
             }
 
@@ -1837,9 +1968,7 @@ class Game {
                 null;
 
 
-            for (const hazard of encounterGhosts) {
             hazard.beginChase();
-        }
 
 
             /*
@@ -2395,7 +2524,7 @@ class Game {
         }
 
 
-        this.ui.showGameComplete();
+        this.ui.showGameComplete(this.score);
 
 
         /*
@@ -2530,25 +2659,20 @@ class Game {
          */
 
         this.ui.showGameOver(
-            message
+            `${message} | FINAL SCORE: ${String(this.score).padStart(5, "0")}`
         );
 
-
-        /*
-         * Restart current level.
-         */
-
+        /* Retry always starts a completely new run at Level 1,
+         * including a fresh collectible/score state. */
         this.ui.setRestartAction(
             () => {
-
-                this.restartLevel(
-
-                    this.levelIndex
-
-                );
-
+                this.restartLevel(0);
             }
         );
+
+        if (this.ui.setGameOverExitAction) {
+            this.ui.setGameOverExitAction(() => this.exitToMenu());
+        }
 
     }
 
@@ -2574,6 +2698,11 @@ class Game {
 
             this.firstEncounterWarningShown =
                 false;
+
+            /* A retry is a completely fresh run. */
+            this.score = 0;
+            this.levelScore = 0;
+            this.combo = 0;
 
         }
 
@@ -2751,7 +2880,7 @@ class Game {
          * Show exit screen.
          */
 
-        this.ui.showExit();
+        this.ui.showExit(this.score);
 
 
         /*

@@ -32,6 +32,13 @@
 
     <header class="game-header">
 
+        <div class="brand-block">
+            <div class="brand-mark" aria-hidden="true">◈</div>
+            <div>
+                <div class="brand-name">HAUNTED <span>MAZE</span></div>
+                <div class="brand-subtitle">ESCAPE THE DARK</div>
+            </div>
+        </div>
 
         <div class="level-info">
 
@@ -53,24 +60,23 @@
         </div>
 
 
-        <div class="score-box">
-            <span class="score-label">SCORE</span>
-            <span id="score">00000</span>
-        </div>
+        <div class="hud-stats">
+            <div class="score-box">
+                <span class="score-label">SCORE</span>
+                <span id="score">00000</span>
+            </div>
 
-
-        <div class="timer-box">
+            <div class="timer-box">
 
             <span class="timer-label">
                 TIME
             </span>
 
-            <span id="timer">
-                01:30
-            </span>
-
+                <span id="timer">
+                    01:30
+                </span>
+            </div>
         </div>
-
 
     </header>
 
@@ -82,12 +88,18 @@
 
     <main class="game-main">
 
-        <div class="maze-wrapper">
+        <div class="maze-frame">
+            <div class="maze-corner corner-tl"></div>
+            <div class="maze-corner corner-tr"></div>
+            <div class="maze-corner corner-bl"></div>
+            <div class="maze-corner corner-br"></div>
+            <div class="maze-wrapper">
 
             <canvas
                 id="gameCanvas"
             ></canvas>
 
+            </div>
         </div>
 
     </main>
@@ -158,7 +170,13 @@
 
 
         <div class="exit-hint">
-            FIND THE EXIT
+            <span class="exit-dot"></span>
+            <span>FIND THE EXIT</span>
+            <span class="exit-dot"></span>
+        </div>
+
+        <div class="footer-tip">
+            <span class="tip-key">W A S D</span> OR <span class="tip-key">ARROWS</span>
         </div>
 
 
@@ -272,12 +290,23 @@
         </p>
 
 
-        <button
-            id="restartButton"
-            class="game-button"
-        >
-            PLAY AGAIN
-        </button>
+        <div class="final-score-line" id="finalScoreLine">FINAL SCORE: 00000</div>
+
+        <div class="overlay-buttons">
+            <button
+                id="restartButton"
+                class="game-button"
+            >
+                RETRY FROM LEVEL 1
+            </button>
+
+            <button
+                id="gameOverExitButton"
+                class="game-button exit-button"
+            >
+                EXIT
+            </button>
+        </div>
 
     </div>
 

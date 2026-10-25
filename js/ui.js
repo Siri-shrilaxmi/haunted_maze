@@ -46,6 +46,12 @@ class UI {
         this.restartButton =
             document.getElementById("restartButton");
 
+        this.gameOverExitButton =
+            document.getElementById("gameOverExitButton");
+
+        this.finalScoreLine =
+            document.getElementById("finalScoreLine");
+
 
         // =========================================================
         // PAUSE
@@ -82,6 +88,8 @@ class UI {
 
         this.exitAction = null;
 
+        this.gameOverExitAction = null;
+
 
         // =========================================================
         // WARNING TIMER
@@ -106,6 +114,20 @@ class UI {
 
                     }
 
+                }
+            );
+
+        }
+
+
+        if (this.gameOverExitButton) {
+
+            this.gameOverExitButton.addEventListener(
+                "click",
+                () => {
+                    if (this.gameOverExitAction) {
+                        this.gameOverExitAction();
+                    }
                 }
             );
 
@@ -389,12 +411,9 @@ class UI {
             message
         );
 
-
         if (this.restartButton) {
-
             this.restartButton.textContent =
-                "PLAY AGAIN";
-
+                "RETRY FROM LEVEL 1";
         }
 
     }
@@ -409,30 +428,32 @@ class UI {
             message
         );
 
-
         if (this.restartButton) {
-
             this.restartButton.textContent =
                 "NEXT LEVEL";
+        }
 
+        if (this.gameOverExitButton) {
+            this.gameOverExitButton.classList.add("hidden");
         }
 
     }
 
 
-    showGameComplete() {
+    showGameComplete(score = 0) {
 
         this.showOverlay(
             "YOU ESCAPED!",
-            "You completed all levels."
+            `All 5 levels completed. FINAL SCORE: ${score}`
         );
 
-
         if (this.restartButton) {
-
             this.restartButton.textContent =
-                "PLAY AGAIN";
+                "RETRY FROM LEVEL 1";
+        }
 
+        if (this.gameOverExitButton) {
+            this.gameOverExitButton.classList.remove("hidden");
         }
 
     }
@@ -480,7 +501,11 @@ class UI {
     // EXIT
     // =============================================================
 
-    showExit() {
+    showExit(score = 0) {
+
+        if (this.finalScoreLine) {
+            this.finalScoreLine.textContent = `FINAL SCORE: ${String(score).padStart(5, "0")}`;
+        }
 
         if (!this.exitOverlay) return;
 
@@ -499,6 +524,11 @@ class UI {
             "hidden"
         );
 
+    }
+
+
+    setGameOverExitAction(action) {
+        this.gameOverExitAction = action;
     }
 
 
