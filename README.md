@@ -12,15 +12,17 @@ Reach the exit before the **90-second timer** expires.
 
 During each round:
 
-- One valid Start-to-Exit route is selected as the **safe route**.
-- The safe route remains free of chase triggers.
-- Other routes can contain hidden ghost triggers.
+- There is **no pre-selected safe route**. Every walkable route can be used.
+- Ghost triggers are distributed across the physical maze and are independent of route planning.
 - Trigger positions are randomized when the level starts and remain fixed during that round.
-- When a trigger is activated, a warning is displayed and the game temporarily freezes.
-- The ghost then appears ahead of the player.
-- The ghost follows the maze rather than moving through walls.
-- After the chase, the ghost remains on the trigger tile and that tile becomes blocked.
-- The player must retreat or find another available route.
+- When a trigger is activated, a warning appears and the ghost encounter begins immediately.
+- Each trigger can create **1–3 ghosts** at distinct, dynamically chosen positions.
+- Ghosts can appear from different directions instead of always spawning behind the player.
+- Before an encounter is accepted, the engine verifies that the player still has a reachable escape route.
+- Previously used ghost spawn tiles are not reused during the level.
+- Ghosts follow the maze rather than moving through walls.
+- After a chase, a ghost can remain on its trigger tile, changing the available space without permanently selecting a single correct route.
+- The player is expected to make mistakes and take risks; the engine should not create an unavoidable trap.
 
 ## Controls
 
@@ -65,33 +67,26 @@ The physical maze layout remains intact during gameplay.
 
 The game engine does not replace the maze with a simple corridor when selecting a safe route. Instead, it analyzes the existing maze and selects a route through it.
 
-## Safe Route
+## Dynamic Route System
 
-At the beginning of a round, the maze engine searches for possible `S → E` routes.
+The current game does **not** select a correct route at the beginning of a level.
+The player is free to choose any corridor and can change direction at any junction.
 
-One route is randomly selected as the safe route.
+Ghost events are generated independently from route planning. This makes the maze a reactive survival game rather than a puzzle where the player is expected to discover one hidden correct path.
 
-The safe route is stored internally using:
-
-- `safePath`
-- `safePathSet`
-
-Trigger generation checks this safe-route set so that a trigger is never intentionally placed on the selected safe route.
-
-Recent safe-route signatures can also be supplied to the maze engine to reduce immediate repetition between rounds.
+The trigger system only controls **where an encounter can start**. The actual ghost positions are selected at runtime from the player's current location, which makes the same trigger behave differently on different attempts.
 
 ## Ghost Trigger System
 
-Triggers are generated from non-safe routes.
+Triggers are generated from **walkable maze cells**, not from a pre-selected route.
 
 A trigger candidate must satisfy several conditions:
 
 - It must be on a walkable tile.
 - It must not be the Start tile.
 - It must not be the Exit tile.
-- It must not be on the selected safe route.
-- It must have sufficient maze space for the ghost spawn.
-- The ghost must be able to appear six maze steps ahead.
+- Triggers are spaced apart so encounters do not accidentally chain from adjacent cells.
+- Ghost spawn positions are chosen later, when the player actually activates the trigger.
 
 ### Six-Step Ghost Spawn
 

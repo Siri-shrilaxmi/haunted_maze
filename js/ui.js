@@ -288,7 +288,11 @@ class UI {
 
 
     updateScore(total, levelScore = total) {
-        if (this.score) this.score.textContent = String(total).padStart(5, "0");
+        if (!this.score) return;
+
+        const safeTotal = Math.max(0, Number(total) || 0);
+        this.score.textContent = safeTotal.toLocaleString("en-US");
+        this.score.setAttribute("aria-label", `Score ${safeTotal}`);
     }
 
     // =============================================================
@@ -403,13 +407,19 @@ class UI {
 
 
     showGameOver(
-        message = "You were caught!"
+        message = "You were caught!",
+        score = 0
     ) {
 
         this.showOverlay(
             "GAME OVER",
             message
         );
+
+        if (this.finalScoreLine) {
+            this.finalScoreLine.textContent = `FINAL SCORE  ${Math.max(0, Number(score) || 0).toLocaleString("en-US")}`;
+            this.finalScoreLine.classList.remove("hidden");
+        }
 
         if (this.restartButton) {
             this.restartButton.textContent =
@@ -428,6 +438,10 @@ class UI {
             message
         );
 
+        if (this.finalScoreLine) {
+            this.finalScoreLine.classList.add("hidden");
+        }
+
         if (this.restartButton) {
             this.restartButton.textContent =
                 "NEXT LEVEL";
@@ -444,8 +458,13 @@ class UI {
 
         this.showOverlay(
             "YOU ESCAPED!",
-            `All 5 levels completed. FINAL SCORE: ${score}`
+            "All 5 levels completed. You survived the maze."
         );
+
+        if (this.finalScoreLine) {
+            this.finalScoreLine.textContent = `FINAL SCORE  ${Math.max(0, Number(score) || 0).toLocaleString("en-US")}`;
+            this.finalScoreLine.classList.remove("hidden");
+        }
 
         if (this.restartButton) {
             this.restartButton.textContent =

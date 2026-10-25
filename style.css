@@ -53,7 +53,7 @@ body::before{
 .timer-box{border-color:rgba(143,216,255,.32)}
 .score-label,.timer-label{display:block;font-size:7px;letter-spacing:3px;color:#758da0;font-weight:700}
 #score,#timer{display:block;margin-top:3px;font-family:"Courier New",monospace;font-size:clamp(19px,2.2vw,29px);font-weight:900;letter-spacing:2px}
-#score{color:var(--gold)}#timer{color:#e7f5ff}
+#score{color:var(--gold);font-variant-numeric:tabular-nums;text-shadow:0 0 14px rgba(255,217,120,.16)}#timer{color:#e7f5ff;font-variant-numeric:tabular-nums}
 
 .game-main{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;padding:14px clamp(12px,4vw,56px);overflow:hidden;position:relative;z-index:1}
 .game-main::before{content:"";position:absolute;width:min(80vw,900px);height:min(60vw,650px);border-radius:50%;background:rgba(50,140,190,.035);filter:blur(35px);pointer-events:none}
@@ -96,11 +96,18 @@ body::before{
 }
 @media (max-height:650px){.game-header{min-height:62px}.game-main{padding:5px}.game-footer{min-height:55px}.key-group{transform:scale(.68);transform-origin:left center;width:74px;height:58px}.exit-hint{font-size:7px}.maze-frame{padding:4px}}
 
+.score-unit{display:block;margin-top:2px;font-size:7px;letter-spacing:3px;color:#7f6d48;font-weight:800}
 .final-score-line {
-    margin: 14px 0 18px;
-    font-size: 1.15rem;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-align: center;
-    opacity: 0.95;
+    margin: 16px 0 20px;
+    padding: 13px 18px;
+    font-family:"Courier New",monospace;
+    font-size:clamp(18px,3vw,26px);
+    font-weight:900;
+    letter-spacing:0.12em;
+    text-align:center;
+    color:var(--gold);
+    background:rgba(255,210,90,.055);
+    border:1px solid rgba(255,217,120,.25);
+    box-shadow:inset 0 0 25px rgba(255,205,80,.025),0 0 20px rgba(255,205,80,.035);
+    font-variant-numeric:tabular-nums;
 }

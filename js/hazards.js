@@ -38,6 +38,8 @@ class ChaseBlock {
         this.lastPlayerDirection = { x: 0, y: 0 };
         this.speedRamp = 0;
         this.stuckTime = 0;
+        this.fadeTime = 0;
+        this.fadeDuration = 0.55;
     }
 
 
@@ -70,6 +72,7 @@ class ChaseBlock {
         this.lastPlayerDirection = { x: 0, y: 0 };
         this.speedRamp = 0;
         this.stuckTime = 0;
+        this.fadeTime = 0;
     }
 
 
@@ -90,6 +93,16 @@ class ChaseBlock {
 
     isBlocking() {
         return this.state === "blocking";
+    }
+
+
+    isFading() {
+        return this.state === "fading";
+    }
+
+
+    isReadyForRespawn() {
+        return this.state === "waiting" && this.fadeTime >= this.fadeDuration;
     }
 
 
@@ -279,39 +292,20 @@ class ChaseBlock {
      */
     finishChase() {
 
-        this.x = this.trigger.x;
-        this.y = this.trigger.y;
-
-        this.state = "blocking";
-
         /*
-         * VERY IMPORTANT:
-         *
-         * Keep active = true.
-         *
-         * This means the stationary ghost continues to be
-         * detected by isColliding().
+         * A completed chase should feel like the ghost vanishes back
+         * into the maze, not like it permanently becomes a second wall.
+         * The ghost remains visible for a short fade-out and is then
+         * recycled by the Game into a new trigger elsewhere.
          */
-        this.active = true;
+        this.state = "fading";
+        /* Fading ghosts are visual only; they cannot kill the player. */
+        this.active = false;
+        this.fadeTime = 0;
 
         this.path = [];
         this.pathIndex = 0;
-
         this.currentTarget = null;
-
-        /*
-         * The physical maze tile is also blocked so the player
-         * cannot walk through the ghost.
-         */
-        if (
-            this.maze &&
-            this.maze.addBlock
-        ) {
-            this.maze.addBlock(
-                this.trigger.x,
-                this.trigger.y
-            );
-        }
     }
 
 
@@ -334,6 +328,16 @@ class ChaseBlock {
         deltaTime,
         player
     ) {
+
+        if (this.state === "fading") {
+            this.fadeTime += deltaTime;
+            if (this.fadeTime >= this.fadeDuration) {
+                this.active = false;
+                this.state = "waiting";
+                this.fadeTime = this.fadeDuration;
+            }
+            return;
+        }
 
         if (this.state === "blocking" || this.state !== "chasing" || !player) {
             return;
@@ -587,9 +591,22 @@ class ChaseBlock {
 
     draw(ctx, tileSize) {
 
-        if (!this.active) {
+        if (!this.active && this.state !== "fading") {
             return;
         }
+
+        const fadeProgress = this.state === "fading"
+            ? Math.min(1, this.fadeTime / this.fadeDuration)
+            : 0;
+        /* Ease the disappearance instead of leaving a fully visible
+           stationary ghost for a noticeable pause. The first frame of
+           fading immediately starts reducing opacity and size. */
+        const easedFade = fadeProgress * fadeProgress;
+        const ghostAlpha = this.state === "fading"
+            ? Math.max(0, 1 - easedFade)
+            : 1;
+        ctx.save();
+        ctx.globalAlpha = ghostAlpha;
 
 
         const centerX =
@@ -605,7 +622,7 @@ class ChaseBlock {
 
 
         const size =
-            tileSize * 0.78;
+            tileSize * (0.78 * (1 - 0.18 * fadeProgress));
 
 
         /*
@@ -863,6 +880,8 @@ class ChaseBlock {
 
 
         ctx.fill();
+
+        ctx.restore();
 
     }
 
